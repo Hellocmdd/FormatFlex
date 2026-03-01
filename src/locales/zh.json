@@ -1,0 +1,155 @@
+{
+  "appName": "DocHub 文档工具",
+  "nav": {
+    "pdf": "PDF 操作",
+    "convert": "文档转换",
+    "ocr": "图片识别",
+    "settings": "设置"
+  },
+  "common": {
+    "selectFile": "选择文件",
+    "selectFiles": "选择多个文件",
+    "selectOutputDir": "选择输出目录",
+    "outputFile": "输出文件",
+    "process": "开始处理",
+    "processing": "处理中...",
+    "success": "处理成功",
+    "error": "处理失败",
+    "download": "下载结果",
+    "copy": "复制文字",
+    "copied": "已复制",
+    "dragHint": "点击或拖拽文件到此区域",
+    "supportedFormats": "支持格式",
+    "outputPath": "输出路径",
+    "browse": "浏览",
+    "reset": "重置"
+  },
+  "pdf": {
+    "merge": {
+      "title": "合并 PDF",
+      "desc": "将多个 PDF 文件合并为一个",
+      "addFiles": "添加 PDF 文件",
+      "order": "调整顺序"
+    },
+    "split": {
+      "title": "拆分 PDF",
+      "desc": "按页面或范围拆分 PDF",
+      "mode": "拆分模式",
+      "allPages": "每页单独拆分",
+      "byRange": "按范围拆分",
+      "ranges": "页面范围（如：1-3,5,7-9）"
+    },
+    "encrypt": {
+      "title": "PDF 加密",
+      "desc": "为 PDF 设置密码保护",
+      "password": "设置密码",
+      "confirmPassword": "确认密码",
+      "passwordMismatch": "两次密码不一致"
+    },
+    "decrypt": {
+      "title": "PDF 解密",
+      "desc": "移除 PDF 密码保护",
+      "password": "输入密码"
+    },
+    "compress": {
+      "title": "压缩 PDF",
+      "desc": "减小 PDF 文件体积",
+      "originalSize": "原始大小",
+      "compressedSize": "压缩后大小",
+      "ratio": "压缩率"
+    },
+    "watermark": {
+      "title": "添加水印",
+      "desc": "为 PDF 每页添加文字水印",
+      "text": "水印文字",
+      "fontSize": "字体大小",
+      "opacity": "透明度",
+      "color": "颜色",
+      "colors": {
+        "gray": "灰色",
+        "red": "红色",
+        "blue": "蓝色",
+        "black": "黑色"
+      }
+    },
+    "pageNumbers": {
+      "title": "添加页码",
+      "desc": "为 PDF 每页添加页码",
+      "position": "位置",
+      "positions": {
+        "bottom-center": "底部居中",
+        "bottom-right": "底部右侧",
+        "bottom-left": "底部左侧",
+        "top-center": "顶部居中"
+      },
+      "startFrom": "起始页码",
+      "fontSize": "字体大小"
+    },
+    "toDocx": {
+      "title": "PDF 转 Word",
+      "desc": "将 PDF 转换为可编辑的 Word 文档"
+    },
+    "info": {
+      "title": "PDF 信息",
+      "pages": "页数",
+      "encrypted": "已加密",
+      "fileSize": "文件大小",
+      "author": "作者",
+      "docTitle": "标题"
+    }
+  },
+  "convert": {
+    "title": "文档转换",
+    "sourceFormat": "源格式",
+    "targetFormat": "目标格式",
+    "wordToPdf": "Word → PDF",
+    "excelToPdf": "Excel → PDF",
+    "pptxToPdf": "PPT → PDF",
+    "pdfToMarkdown": "PDF → Markdown",
+    "imagesToPdf": "图片 → PDF",
+    "htmlToPdf": "HTML → PDF",
+    "excelToCsv": "Excel → CSV",
+    "libreofficeNote": "注意：Word/Excel/PPT 转换需要安装 LibreOffice"
+  },
+  "ocr": {
+    "title": "图片文字识别",
+    "provider": "识别方式",
+    "local": "本地 Tesseract",
+    "baidu": "百度云 OCR",
+    "language": "识别语言",
+    "langs": {
+      "chi_sim+eng": "中英文",
+      "chi_sim": "中文",
+      "eng": "英文"
+    },
+    "result": "识别结果",
+    "noResult": "识别结果将显示在这里",
+    "accurate": "精准识别（高精度，消耗配额）",
+    "pdfOcr": "识别 PDF 文件",
+    "batchOcr": "批量识别"
+  },
+  "settings": {
+    "title": "设置",
+    "language": "界面语言",
+    "theme": "主题",
+    "themes": {
+      "light": "亮色",
+      "dark": "暗色"
+    },
+    "ocr": {
+      "title": "OCR 云端配置",
+      "provider": "云端提供商",
+      "baiduAppId": "百度 App ID",
+      "baiduApiKey": "百度 API Key",
+      "baiduSecretKey": "百度 Secret Key",
+      "save": "保存配置",
+      "saved": "配置已保存",
+      "hint": "API Key 保存在本地，不会上传"
+    },
+    "python": {
+      "title": "Python 路径",
+      "path": "Python 可执行文件路径",
+      "hint": "留空使用默认路径（项目内 venv）"
+    }
+  }
+}

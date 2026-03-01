@@ -1,0 +1,155 @@
+{
+  "appName": "DocHub",
+  "nav": {
+    "pdf": "PDF Tools",
+    "convert": "Convert",
+    "ocr": "OCR",
+    "settings": "Settings"
+  },
+  "common": {
+    "selectFile": "Select File",
+    "selectFiles": "Select Files",
+    "selectOutputDir": "Select Output Directory",
+    "outputFile": "Output File",
+    "process": "Process",
+    "processing": "Processing...",
+    "success": "Success",
+    "error": "Error",
+    "download": "Download",
+    "copy": "Copy Text",
+    "copied": "Copied",
+    "dragHint": "Click or drag files here",
+    "supportedFormats": "Supported formats",
+    "outputPath": "Output Path",
+    "browse": "Browse",
+    "reset": "Reset"
+  },
+  "pdf": {
+    "merge": {
+      "title": "Merge PDF",
+      "desc": "Combine multiple PDF files into one",
+      "addFiles": "Add PDF Files",
+      "order": "Adjust Order"
+    },
+    "split": {
+      "title": "Split PDF",
+      "desc": "Split a PDF by page or range",
+      "mode": "Split Mode",
+      "allPages": "Each page separately",
+      "byRange": "By page ranges",
+      "ranges": "Page ranges (e.g. 1-3,5,7-9)"
+    },
+    "encrypt": {
+      "title": "Encrypt PDF",
+      "desc": "Password-protect a PDF",
+      "password": "Set Password",
+      "confirmPassword": "Confirm Password",
+      "passwordMismatch": "Passwords do not match"
+    },
+    "decrypt": {
+      "title": "Decrypt PDF",
+      "desc": "Remove PDF password protection",
+      "password": "Enter Password"
+    },
+    "compress": {
+      "title": "Compress PDF",
+      "desc": "Reduce PDF file size",
+      "originalSize": "Original Size",
+      "compressedSize": "Compressed Size",
+      "ratio": "Compression Ratio"
+    },
+    "watermark": {
+      "title": "Add Watermark",
+      "desc": "Add text watermark to each page",
+      "text": "Watermark Text",
+      "fontSize": "Font Size",
+      "opacity": "Opacity",
+      "color": "Color",
+      "colors": {
+        "gray": "Gray",
+        "red": "Red",
+        "blue": "Blue",
+        "black": "Black"
+      }
+    },
+    "pageNumbers": {
+      "title": "Add Page Numbers",
+      "desc": "Add page numbers to each page",
+      "position": "Position",
+      "positions": {
+        "bottom-center": "Bottom Center",
+        "bottom-right": "Bottom Right",
+        "bottom-left": "Bottom Left",
+        "top-center": "Top Center"
+      },
+      "startFrom": "Start From",
+      "fontSize": "Font Size"
+    },
+    "toDocx": {
+      "title": "PDF to Word",
+      "desc": "Convert PDF to an editable Word document"
+    },
+    "info": {
+      "title": "PDF Info",
+      "pages": "Pages",
+      "encrypted": "Encrypted",
+      "fileSize": "File Size",
+      "author": "Author",
+      "docTitle": "Title"
+    }
+  },
+  "convert": {
+    "title": "Document Conversion",
+    "sourceFormat": "Source Format",
+    "targetFormat": "Target Format",
+    "wordToPdf": "Word → PDF",
+    "excelToPdf": "Excel → PDF",
+    "pptxToPdf": "PPT → PDF",
+    "pdfToMarkdown": "PDF → Markdown",
+    "imagesToPdf": "Images → PDF",
+    "htmlToPdf": "HTML → PDF",
+    "excelToCsv": "Excel → CSV",
+    "libreofficeNote": "Note: Word/Excel/PPT conversion requires LibreOffice"
+  },
+  "ocr": {
+    "title": "Image Text Recognition",
+    "provider": "Provider",
+    "local": "Local (Tesseract)",
+    "baidu": "Baidu Cloud OCR",
+    "language": "Language",
+    "langs": {
+      "chi_sim+eng": "Chinese + English",
+      "chi_sim": "Chinese",
+      "eng": "English"
+    },
+    "result": "Recognition Result",
+    "noResult": "Recognition results will appear here",
+    "accurate": "Accurate mode (high precision, uses quota)",
+    "pdfOcr": "Recognize PDF",
+    "batchOcr": "Batch Recognize"
+  },
+  "settings": {
+    "title": "Settings",
+    "language": "Interface Language",
+    "theme": "Theme",
+    "themes": {
+      "light": "Light",
+      "dark": "Dark"
+    },
+    "ocr": {
+      "title": "Cloud OCR Config",
+      "provider": "Cloud Provider",
+      "baiduAppId": "Baidu App ID",
+      "baiduApiKey": "Baidu API Key",
+      "baiduSecretKey": "Baidu Secret Key",
+      "save": "Save Config",
+      "saved": "Config saved",
+      "hint": "API keys are stored locally and never uploaded"
+    },
+    "python": {
+      "title": "Python Path",
+      "path": "Python executable path",
+      "hint": "Leave empty to use default (project venv)"
+    }
+  }
+}
