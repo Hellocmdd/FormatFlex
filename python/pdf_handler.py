@@ -2,6 +2,9 @@
 import sys
 import json
 import os
+import io
+import time
+import itertools
 import argparse
 from pathlib import Path
 
@@ -230,6 +233,176 @@ def get_pdf_info(input_file: str) -> dict:
         return {"success": False, "error": str(e)}
 
 
+# ── Brute Force ───────────────────────────────────────────────────────────────
+
+CHARSETS = {
+    "digits":  "0123456789",
+    "lower":   "abcdefghijklmnopqrstuvwxyz",
+    "upper":   "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+    "symbols": "!@#$%^&*()-_=+[]{}|;:,.<>?/",
+}
+
+# Module-level reader for each worker process (set by pool initializer)
+_bf_reader = None
+
+
+def _bf_init(shm_name: str, shm_size: int):
+    """Pool worker initializer: load PDF once per process via shared memory."""
+    global _bf_reader
+    from multiprocessing.shared_memory import SharedMemory
+    from PyPDF2 import PdfReader
+    shm = SharedMemory(name=shm_name)
+    data = bytes(shm.buf[:shm_size])
+    shm.close()
+    _bf_reader = PdfReader(io.BytesIO(data))
+
+
+def _bf_try_chunk(passwords: list):
+    """Try a list of passwords; return the correct one or None."""
+    for pwd in passwords:
+        try:
+            if _bf_reader.decrypt(pwd) != 0:
+                return pwd
+        except Exception:
+            pass
+    return None
+
+
+def _chunk_gen(iterable, size: int):
+    """Yield successive chunks of given size from an iterable."""
+    it = iter(iterable)
+    while True:
+        chunk = list(itertools.islice(it, size))
+        if not chunk:
+            break
+        yield chunk
+
+
+def bruteforce_pdf(pdf_path: str,
+                   mode: str = "charset",
+                   charset_keys: list = None,
+                   custom_charset: str = "",
+                   min_len: int = 1,
+                   max_len: int = 4,
+                   dict_path: str = None,
+                   num_workers: int = 0) -> dict:
+    """
+    Brute-force PDF password using multiprocessing (bypasses GIL for true
+    parallelism). Hashlib/OpenSSL underneath uses CPU SIMD intrinsics for MD5.
+
+    Progress is streamed to stdout as JSON lines so Rust can emit Tauri events:
+      {"type":"progress","tried":N,"total":T,"speed":S,"eta":E,"elapsed":X}
+      {"type":"found","password":"...","tried":N,"elapsed":X}
+      {"type":"done","found":false,"tried":N,"elapsed":X}
+      {"type":"error","error":"..."}
+    """
+    import multiprocessing
+    import itertools
+    from multiprocessing.shared_memory import SharedMemory
+    from PyPDF2 import PdfReader
+
+    # ── Validate ──────────────────────────────────────────────────────────────
+    if not os.path.exists(pdf_path):
+        _bf_print("error", error="File not found")
+        return {"success": False, "error": "File not found"}
+
+    with open(pdf_path, "rb") as f:
+        pdf_bytes = f.read()
+
+    probe = PdfReader(io.BytesIO(pdf_bytes))
+    if not probe.is_encrypted:
+        _bf_print("error", error="PDF is not encrypted")
+        return {"success": False, "error": "PDF is not encrypted"}
+
+    n_workers = num_workers if num_workers > 0 else multiprocessing.cpu_count()
+    chunk_size = max(200, 1000 // n_workers)
+
+    # ── Build charset / wordlist ──────────────────────────────────────────────
+    if mode == "charset":
+        keys = charset_keys or ["digits"]
+        raw = "".join(CHARSETS.get(k, k) for k in keys) + (custom_charset or "")
+        # deduplicate preserving order
+        seen_chars: set = set()
+        charset = "".join(c for c in raw if not (c in seen_chars or seen_chars.add(c)))  # type: ignore
+        if not charset:
+            _bf_print("error", error="Empty charset")
+            return {"success": False, "error": "Empty charset"}
+        candidates = (
+            "".join(p)
+            for ln in range(min_len, max_len + 1)
+            for p in itertools.product(charset, repeat=ln)
+        )
+        total = sum(len(charset) ** ln for ln in range(min_len, max_len + 1))
+    else:
+        if not dict_path or not os.path.exists(dict_path):
+            _bf_print("error", error="Dictionary file not found")
+            return {"success": False, "error": "Dictionary file not found"}
+        with open(dict_path, "r", encoding="utf-8", errors="replace") as f:
+            words = [line.rstrip("\n") for line in f]
+        candidates = iter(words)
+        total = len(words)
+
+    # ── Shared memory for PDF bytes ───────────────────────────────────────────
+    shm = SharedMemory(create=True, size=max(1, len(pdf_bytes)))
+    shm.buf[:len(pdf_bytes)] = pdf_bytes
+    shm_name, shm_size = shm.name, len(pdf_bytes)
+
+    tried = 0
+    found_pwd = None
+    start_time = time.time()
+    last_report = 0.0
+
+    try:
+        with multiprocessing.Pool(
+            processes=n_workers,
+            initializer=_bf_init,
+            initargs=(shm_name, shm_size),
+        ) as pool:
+            for result in pool.imap_unordered(
+                _bf_try_chunk,
+                _chunk_gen(candidates, chunk_size),
+                chunksize=1,
+            ):
+                tried += chunk_size
+                now = time.time()
+                elapsed = now - start_time
+                speed = int(tried / elapsed) if elapsed > 0 else 0
+                eta = int((total - tried) / speed) if speed > 0 and tried < total else -1
+
+                if now - last_report >= 0.4:
+                    _bf_print("progress", tried=min(tried, total), total=total,
+                              speed=speed, eta=eta, elapsed=round(elapsed, 1))
+                    last_report = now
+
+                if result is not None:
+                    found_pwd = result
+                    pool.terminate()
+                    break
+    finally:
+        shm.close()
+        try:
+            shm.unlink()
+        except Exception:
+            pass
+
+    elapsed = time.time() - start_time
+    if found_pwd is not None:
+        _bf_print("found", password=found_pwd, tried=min(tried, total),
+                  elapsed=round(elapsed, 1))
+        return {"success": True, "found": True, "password": found_pwd,
+                "tried": tried, "elapsed": round(elapsed, 1)}
+    else:
+        _bf_print("done", found=False, tried=min(tried, total),
+                  elapsed=round(elapsed, 1))
+        return {"success": True, "found": False, "tried": tried,
+                "elapsed": round(elapsed, 1)}
+
+
+def _bf_print(event_type: str, **kwargs):
+    """Print a JSON progress line to stdout (Rust reads this)."""
+    print(json.dumps({"type": event_type, **kwargs}, ensure_ascii=False), flush=True)
+
+
 OPERATIONS = {
     "merge": merge_pdfs,
     "split": split_pdf,
@@ -240,14 +413,21 @@ OPERATIONS = {
     "page_numbers": add_page_numbers,
     "to_docx": pdf_to_docx,
     "info": get_pdf_info,
+    "bruteforce": bruteforce_pdf,
 }
 
 if __name__ == "__main__":
+    # Allow bruteforce to be called with streaming output (no final JSON print)
     parser = argparse.ArgumentParser(description="PDF Handler")
     parser.add_argument("operation", choices=list(OPERATIONS.keys()))
     parser.add_argument("params", nargs="?", help="JSON-encoded parameters")
     args = parser.parse_args()
 
     params = json.loads(args.params) if args.params else {}
-    result = OPERATIONS[args.operation](**params)
-    print(json.dumps(result, ensure_ascii=False))
+    if args.operation == "bruteforce":
+        # bruteforce streams progress to stdout itself; just call it
+        OPERATIONS[args.operation](**params)
+    else:
+        result = OPERATIONS[args.operation](**params)
+        print(json.dumps(result, ensure_ascii=False))
+

@@ -1,22 +1,25 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-use std::process::Command;
+use std::process::{Command, Stdio};
+use std::sync::{Arc, Mutex};
+use tauri::Emitter;
 
-/// Run a Python handler script with the given operation and JSON params.
-/// Returns the JSON output from the Python script.
-fn run_python_handler(script: &str, operation: &str, params: &str) -> Result<String, String> {
-    // Resolve python venv relative to the app resource dir at runtime,
-    // falling back to system python3 during development.
+// ── Global bruteforce process handle (for cancellation) ───────────────────────
+
+static BRUTEFORCE_CHILD: std::sync::LazyLock<Arc<Mutex<Option<std::process::Child>>>> =
+    std::sync::LazyLock::new(|| Arc::new(Mutex::new(None)));
+
+/// Resolve python interpreter and script path by walking up from cwd.
+fn resolve_python_and_script(script: &str) -> (String, String) {
     let python = std::env::current_dir()
         .ok()
         .and_then(|d| {
-            // Walk up to find the project root (contains python/venv)
-            let mut path = d.clone();
+            let mut p = d.clone();
             for _ in 0..5 {
-                let venv = path.join("python/venv/bin/python3");
+                let venv = p.join("python/venv/bin/python3");
                 if venv.exists() {
                     return Some(venv.to_string_lossy().to_string());
                 }
-                if !path.pop() { break; }
+                if !p.pop() { break; }
             }
             None
         })
@@ -35,6 +38,14 @@ fn run_python_handler(script: &str, operation: &str, params: &str) -> Result<Str
             format!("python/{}", script)
         })
         .unwrap_or_else(|_| format!("python/{}", script));
+
+    (python, script_path)
+}
+
+/// Run a Python handler script with the given operation and JSON params.
+/// Returns the JSON output from the Python script.
+fn run_python_handler(script: &str, operation: &str, params: &str) -> Result<String, String> {
+    let (python, script_path) = resolve_python_and_script(script);
 
     let output = Command::new(&python)
         .arg(&script_path)
@@ -158,6 +169,84 @@ fn ocr_batch(params: String) -> Result<String, String> {
     run_python_handler("ocr_handler.py", "batch", &params)
 }
 
+// ── Bruteforce Commands ───────────────────────────────────────────────────────
+
+/// Start a brute-force attack in a background OS thread.
+/// Python streams JSON progress lines to stdout; we emit them as Tauri events.
+/// Returns immediately with {"success":true,"status":"started"}.
+#[tauri::command]
+fn pdf_bruteforce(app: tauri::AppHandle, params: String) -> Result<String, String> {
+    // Kill any running bruteforce first
+    {
+        let mut guard = BRUTEFORCE_CHILD.lock().unwrap();
+        if let Some(ref mut child) = *guard {
+            let _ = child.kill();
+            let _ = child.wait();
+        }
+        *guard = None;
+    }
+
+    let (python, script_path) = resolve_python_and_script("pdf_handler.py");
+
+    let mut child = Command::new(&python)
+        .arg(&script_path)
+        .arg("bruteforce")
+        .arg(&params)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .map_err(|e| format!("Failed to start bruteforce: {}", e))?;
+
+    // Take stdout before storing child
+    let stdout = child.stdout.take().ok_or("No stdout")?;
+    let child_arc = BRUTEFORCE_CHILD.clone();
+    *child_arc.lock().unwrap() = Some(child);
+
+    // Spawn OS thread to read stdout line-by-line and emit Tauri events
+    std::thread::spawn(move || {
+        use std::io::{BufRead, BufReader};
+        let reader = BufReader::new(stdout);
+        for line in reader.lines() {
+            match line {
+                Ok(l) => {
+                    if let Ok(val) = serde_json::from_str::<serde_json::Value>(&l) {
+                        let event_type = val.get("type")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("")
+                            .to_owned();
+                        let _ = app.emit("bruteforce_progress", &val);
+                        if matches!(event_type.as_str(), "found" | "done" | "error") {
+                            break;
+                        }
+                    }
+                }
+                Err(_) => break,
+            }
+        }
+        // Clean up child process
+        let mut guard = child_arc.lock().unwrap();
+        if let Some(ref mut child) = *guard {
+            let _ = child.wait();
+        }
+        *guard = None;
+    });
+
+    Ok(r#"{"success":true,"status":"started"}"#.to_string())
+}
+
+/// Cancel a running brute-force attack.
+#[tauri::command]
+fn pdf_bruteforce_cancel() -> Result<String, String> {
+    let mut guard = BRUTEFORCE_CHILD.lock().unwrap();
+    if let Some(ref mut child) = *guard {
+        let _ = child.kill();
+        let _ = child.wait();
+        *guard = None;
+        return Ok(r#"{"success":true,"cancelled":true}"#.to_string());
+    }
+    Ok(r#"{"success":true,"cancelled":false}"#.to_string())
+}
+
 // ── App Entry ─────────────────────────────────────────────────────────────────
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -175,6 +264,8 @@ pub fn run() {
             convert_html_to_pdf, convert_excel_to_csv,
             // OCR
             ocr_local, ocr_baidu, ocr_pdf, ocr_batch,
+            // Bruteforce
+            pdf_bruteforce, pdf_bruteforce_cancel,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

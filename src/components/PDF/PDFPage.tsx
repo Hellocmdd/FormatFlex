@@ -7,10 +7,12 @@ import {
   MergeCellsOutlined, ScissorOutlined,
   LockOutlined, UnlockOutlined, CompressOutlined,
   FontSizeOutlined, NumberOutlined, FileWordOutlined, FilePdfOutlined,
+  ThunderboltOutlined,
 } from '@ant-design/icons';
 
 import { useTranslation } from 'react-i18next';
 import { invokeCmd, PyResult } from '../../hooks/useInvoke';
+import BruteforcePanel from './BruteforcePanel';
 
 const { Title, Text } = Typography;
 const { Dragger } = Upload;
@@ -399,6 +401,11 @@ const PDFPage: React.FC = () => {
     { key: 'split', label: t('pdf.split.title'), children: <SplitTab /> },
     { key: 'encrypt', label: t('pdf.encrypt.title'), children: <EncryptTab /> },
     { key: 'decrypt', label: t('pdf.decrypt.title'), children: <DecryptTab /> },
+    {
+      key: 'bruteforce',
+      label: <span><ThunderboltOutlined /> 暴力破解</span>,
+      children: <BruteforcePanel />,
+    },
     { key: 'compress', label: t('pdf.compress.title'), children: <CompressTab /> },
     { key: 'watermark', label: t('pdf.watermark.title'), children: <WatermarkTab /> },
     { key: 'pageNumbers', label: t('pdf.pageNumbers.title'), children: <PageNumbersTab /> },
