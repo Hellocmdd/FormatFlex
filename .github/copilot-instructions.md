@@ -75,8 +75,22 @@ Language is persisted in `localStorage`. The Ant Design `locale` prop in `App.ts
 ```
 The `PyResult` TypeScript interface in `useInvoke.ts` covers the common fields. Extend it locally in a component for operation-specific extra fields (e.g., `ratio`, `pages`, `words_count`).
 
+### Streaming / progress commands (exception to standard pattern)
+
+`pdf_bruteforce` is the only command that streams progress instead of returning a single result. Its Rust function signature takes an extra `app: tauri::AppHandle` parameter and emits Tauri events line-by-line from a spawned OS thread:
+
+```rust
+#[tauri::command]
+fn pdf_bruteforce(app: tauri::AppHandle, params: String) -> Result<String, String> {
+    // returns immediately with {"success":true,"status":"started"}
+    // emits "bruteforce_progress" events as the Python script writes JSON lines to stdout
+}
+```
+
+On the frontend, `BruteforcePanel.tsx` uses `listen()` from `@tauri-apps/api/event` (not `invokeCmd()`) and calls `invoke()` directly (because the Rust signature includes `AppHandle` alongside `params`). A companion `pdf_bruteforce_cancel` command kills the child process via a global `Mutex<Option<Child>>`. Follow this same pattern for any future long-running operation that needs progress reporting.
+
 ### Frontend component pattern
-Each feature page (`PDFPage`, `ConvertPage`, `OCRPage`) is a single file using **function components defined inline** as `const FooTab = () => { ... }` inside the parent, then composed into an Ant Design `<Tabs items={...} />`. This keeps all state local to each tab and avoids prop drilling.
+Most feature pages (`ConvertPage`, `OCRPage`) keep all tab panels as **inline function components** (`const FooTab = () => { ... }`) inside the parent file, composed into an Ant Design `<Tabs items={...} />`. Complex panels that need event listeners or substantial state (e.g., `BruteforcePanel`) are extracted into their own files under the feature directory.
 
 ### i18n keys
 All user-visible strings use `t('section.subsection.key')` — never hardcoded Chinese or English. When adding new UI text, add the key to **both** `src/locales/zh.json` and `src/locales/en.json`.

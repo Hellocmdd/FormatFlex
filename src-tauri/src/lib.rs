@@ -160,6 +160,11 @@ fn ocr_baidu(params: String) -> Result<String, String> {
 }
 
 #[tauri::command]
+fn ocr_glm(params: String) -> Result<String, String> {
+    run_python_handler("ocr_handler.py", "glm", &params)
+}
+
+#[tauri::command]
 fn ocr_pdf(params: String) -> Result<String, String> {
     run_python_handler("ocr_handler.py", "pdf", &params)
 }
@@ -263,7 +268,7 @@ pub fn run() {
             convert_pdf_to_markdown, convert_images_to_pdf,
             convert_html_to_pdf, convert_excel_to_csv,
             // OCR
-            ocr_local, ocr_baidu, ocr_pdf, ocr_batch,
+            ocr_local, ocr_baidu, ocr_glm, ocr_pdf, ocr_batch,
             // Bruteforce
             pdf_bruteforce, pdf_bruteforce_cancel,
         ])

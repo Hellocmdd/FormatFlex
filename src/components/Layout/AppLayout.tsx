@@ -1,17 +1,15 @@
-import React, { useState } from 'react';
-import { Layout, Menu, Typography, Switch, Space } from 'antd';
+import React from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import {
   FilePdfOutlined,
   SyncOutlined,
   ScanOutlined,
   SettingOutlined,
   TranslationOutlined,
+  MoonOutlined,
+  SunOutlined,
 } from '@ant-design/icons';
-import { useNavigate, useLocation } from 'react-router-dom';
-import { useTranslation } from 'react-i18next';
-
-const { Sider, Content, Header } = Layout;
-const { Title } = Typography;
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -23,75 +21,68 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children, darkMode, onToggleDark 
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
-  const [collapsed, setCollapsed] = useState(false);
 
-  const menuItems = [
-    { key: '/pdf', icon: <FilePdfOutlined />, label: t('nav.pdf') },
-    { key: '/convert', icon: <SyncOutlined />, label: t('nav.convert') },
-    { key: '/ocr', icon: <ScanOutlined />, label: t('nav.ocr') },
-    { key: '/settings', icon: <SettingOutlined />, label: t('nav.settings') },
+  const navItems = [
+    { path: '/pdf',      icon: <FilePdfOutlined />, label: t('nav.pdf'),      color: '#F56776' },
+    { path: '/convert',  icon: <SyncOutlined />,    label: t('nav.convert'),  color: '#4D84FF' },
+    { path: '/ocr',      icon: <ScanOutlined />,    label: t('nav.ocr'),      color: '#34C48A' },
+    { path: '/settings', icon: <SettingOutlined />, label: t('nav.settings'), color: '#F0883E' },
   ];
 
-  const toggleLang = () => {
-    i18n.changeLanguage(i18n.language === 'zh' ? 'en' : 'zh');
-  };
+  const toggleLang = () =>
+    i18n.changeLanguage(i18n.language.startsWith('zh') ? 'en' : 'zh');
 
   return (
-    <Layout style={{ minHeight: '100vh' }}>
-      <Sider
-        collapsible
-        collapsed={collapsed}
-        onCollapse={setCollapsed}
-        theme={darkMode ? 'dark' : 'light'}
-        style={{ borderRight: '1px solid #f0f0f0' }}
-      >
-        <div style={{ padding: '16px', textAlign: 'center' }}>
-          {!collapsed && (
-            <Title level={4} style={{ margin: 0, color: darkMode ? '#fff' : '#1677ff' }}>
-              DocHub
-            </Title>
-          )}
+    <div className={`app-shell ${darkMode ? 'dark' : 'light'}`}>
+      <aside className="app-sidebar">
+        {/* Brand */}
+        <div className="sidebar-brand">
+          <div className="brand-logo">
+            <FilePdfOutlined />
+          </div>
+          <div>
+            <div className="brand-name">DocHub</div>
+          </div>
         </div>
-        <Menu
-          theme={darkMode ? 'dark' : 'light'}
-          mode="inline"
-          selectedKeys={[location.pathname]}
-          items={menuItems}
-          onClick={({ key }) => navigate(key)}
-        />
-      </Sider>
-      <Layout>
-        <Header
-          style={{
-            background: darkMode ? '#141414' : '#fff',
-            padding: '0 24px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'flex-end',
-            borderBottom: '1px solid #f0f0f0',
-            gap: 16,
-          }}
-        >
-          <Space>
-            <TranslationOutlined />
-            <span
-              onClick={toggleLang}
-              style={{ cursor: 'pointer', fontWeight: 500 }}
+
+        {/* Navigation */}
+        <nav className="sidebar-nav">
+          {navItems.map(item => (
+            <div
+              key={item.path}
+              className={`nav-item ${location.pathname === item.path ? 'active' : ''}`}
+              onClick={() => navigate(item.path)}
+              style={{ '--item-color': item.color } as React.CSSProperties}
             >
-              {i18n.language === 'zh' ? 'EN' : '中文'}
-            </span>
-            <Switch
-              checked={darkMode}
-              onChange={onToggleDark}
-              checkedChildren="🌙"
-              unCheckedChildren="☀️"
-            />
-          </Space>
-        </Header>
-        <Content style={{ padding: 24, overflow: 'auto' }}>{children}</Content>
-      </Layout>
-    </Layout>
+              <span className="nav-icon">{item.icon}</span>
+              <span className="nav-label">{item.label}</span>
+              <span className="nav-dot" />
+            </div>
+          ))}
+        </nav>
+
+        {/* Footer controls */}
+        <div className="sidebar-footer">
+          <button className="ctrl-btn" onClick={toggleLang} title="Toggle language">
+            <TranslationOutlined />
+            <span>{i18n.language.startsWith('zh') ? 'EN' : '中'}</span>
+          </button>
+          <button
+            className={`ctrl-btn ${darkMode ? 'active' : ''}`}
+            onClick={() => onToggleDark(!darkMode)}
+            title="Toggle dark mode"
+          >
+            {darkMode ? <MoonOutlined /> : <SunOutlined />}
+          </button>
+        </div>
+      </aside>
+
+      <main className="app-main">
+        <div className="app-content">{children}</div>
+      </main>
+    </div>
   );
 };
 
 export default AppLayout;
+

@@ -14,8 +14,17 @@ import SettingsPage from './components/Settings/SettingsPage';
 import './App.css';
 
 const App: React.FC = () => {
-  const [darkMode, setDarkMode] = useState(false);
+  const [darkMode, setDarkMode] = useState(true);
   const { i18n } = useTranslation();
+
+  React.useEffect(() => {
+    const root = document.body;
+    if (darkMode) {
+      root.classList.add('dark-mode');
+    } else {
+      root.classList.remove('dark-mode');
+    }
+  }, [darkMode]);
 
   const locale = i18n.language.startsWith('zh') ? zhCN : enUS;
 
@@ -24,7 +33,30 @@ const App: React.FC = () => {
       locale={locale}
       theme={{
         algorithm: darkMode ? theme.darkAlgorithm : theme.defaultAlgorithm,
-        token: { colorPrimary: '#1677ff' },
+        token: {
+          colorPrimary: darkMode ? '#4D84FF' : '#2B6DE4',
+          borderRadius: 8,
+          fontFamily: "'Outfit', -apple-system, 'PingFang SC', 'Noto Sans SC', sans-serif",
+          colorBgContainer: darkMode ? '#161D2E' : '#FFFFFF',
+          colorBgElevated: darkMode ? '#1C2540' : '#FFFFFF',
+          colorBorder: darkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)',
+          colorText: darkMode ? '#E8EDF5' : '#0D1A2D',
+          colorTextSecondary: darkMode ? '#7A8BA8' : '#5A6A80',
+          colorBgLayout: darkMode ? '#0F1520' : '#F5F8FD',
+        },
+        components: {
+          Menu: {
+            activeBarBorderWidth: 0,
+            itemSelectedBg: 'var(--accent-bg)',
+            itemSelectedColor: 'var(--accent)',
+            itemBg: 'transparent',
+          },
+          Button: { borderRadius: 7, controlHeight: 34 },
+          Input:  { controlHeight: 34, borderRadius: 7 },
+          Select: { controlHeight: 34, borderRadius: 7 },
+          InputNumber: { controlHeight: 34, borderRadius: 7 },
+          Tabs: { borderRadius: 7 },
+        },
       }}
     >
       <BrowserRouter>

@@ -1,72 +1,71 @@
 import React, { useState } from 'react';
-import { Card, Tabs, Upload, Button, Input, message, Typography, Space, Alert } from 'antd';
-import { SyncOutlined } from '@ant-design/icons';
+import { Upload, Button, Input, message, Typography, Space, Alert } from 'antd';
+import {
+  SyncOutlined, FileWordOutlined, FileExcelOutlined,
+  FilePptOutlined, FileMarkdownOutlined, PictureOutlined,
+  Html5Outlined, TableOutlined,
+} from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { invokeCmd, PyResult } from '../../hooks/useInvoke';
 
-const { Title, Text } = Typography;
+const { Text } = Typography;
 const { Dragger } = Upload;
+
+/* ── Operation definitions ─────────────────────────── */
+const OPERATIONS = [
+  { key: 'wordToPdf',      icon: <FileWordOutlined />,     color: '#4D84FF',  colorBg: 'rgba(77,132,255,0.12)',   titleKey: 'convert.wordToPdf',      accept: '.docx,.doc',              cmd: 'convert_word_to_pdf',     ext: '.pdf',   libreNote: true  },
+  { key: 'excelToPdf',     icon: <FileExcelOutlined />,    color: '#34C48A',  colorBg: 'rgba(52,196,138,0.12)',   titleKey: 'convert.excelToPdf',     accept: '.xlsx,.xls',             cmd: 'convert_excel_to_pdf',    ext: '.pdf',   libreNote: true  },
+  { key: 'pptxToPdf',      icon: <FilePptOutlined />,      color: '#F0883E',  colorBg: 'rgba(240,136,62,0.12)',   titleKey: 'convert.pptxToPdf',      accept: '.pptx,.ppt',             cmd: 'convert_pptx_to_pdf',     ext: '.pdf',   libreNote: true  },
+  { key: 'pdfToMarkdown',  icon: <FileMarkdownOutlined />, color: '#A78BFA',  colorBg: 'rgba(167,139,250,0.12)', titleKey: 'convert.pdfToMarkdown',  accept: '.pdf',                   cmd: 'convert_pdf_to_markdown', ext: '.md',    libreNote: false },
+  { key: 'imagesToPdf',    icon: <PictureOutlined />,      color: '#F56776',  colorBg: 'rgba(245,103,118,0.12)', titleKey: 'convert.imagesToPdf',    accept: '.jpg,.jpeg,.png,.bmp,.tiff,.webp', cmd: '',  ext: '.pdf',   libreNote: false },
+  { key: 'htmlToPdf',      icon: <Html5Outlined />,        color: '#22D3EE',  colorBg: 'rgba(34,211,238,0.12)',  titleKey: 'convert.htmlToPdf',      accept: '.html,.htm',             cmd: 'convert_html_to_pdf',     ext: '.pdf',   libreNote: false },
+  { key: 'excelToCsv',     icon: <TableOutlined />,        color: '#FBBF24',  colorBg: 'rgba(251,191,36,0.12)',  titleKey: 'convert.excelToCsv',     accept: '.xlsx,.xls',             cmd: 'convert_excel_to_csv',    ext: '(dir)',  libreNote: false },
+];
 
 const ConvertPage: React.FC = () => {
   const { t } = useTranslation();
   const [loading, setLoading] = useState(false);
+  const [activeOp, setActiveOp] = useState('wordToPdf');
 
-  const makeTab = (
-    key: string,
-    titleKey: string,
-    accept: string,
-    cmd: string,
-    buildParams: (file: string, output: string, extra?: unknown) => Record<string, unknown>,
-    outputExt: string,
-    extra?: React.ReactNode
-  ) => {
-    const TabContent = () => {
-      const [file, setFile] = useState('');
-      const [output, setOutput] = useState('');
+  /* Generic single-file converter */
+  const GenericTab = ({ op }: { op: typeof OPERATIONS[0] }) => {
+    const [file, setFile] = useState('');
+    const [output, setOutput] = useState('');
 
-      const handleConvert = async () => {
-        if (!file) return message.warning('请选择文件');
-        setLoading(true);
-        try {
-          const outPath = output || file.replace(/\.[^.]+$/, outputExt);
-          const result = await invokeCmd<PyResult>(cmd, buildParams(file, outPath));
-          if (result.success) {
-            message.success(`${t('common.success')}: ${result.output || outPath}`);
-          } else {
-            message.error(`${t('common.error')}: ${result.error}`);
-          }
-        } finally {
-          setLoading(false);
-        }
-      };
-
-      return (
-        <Space direction="vertical" style={{ width: '100%' }}>
-          {extra}
-          <Dragger
-            accept={accept}
-            maxCount={1}
-            beforeUpload={(f) => { setFile((f as any).path || f.name); return false; }}
-          >
-            <p className="ant-upload-hint">{t('common.dragHint')}</p>
-            <Text type="secondary">{t('common.supportedFormats')}: {accept}</Text>
-          </Dragger>
-          <Input
-            placeholder={t('common.outputFile')}
-            value={output}
-            onChange={(e) => setOutput(e.target.value)}
-            addonAfter={outputExt}
-          />
-          <Button type="primary" icon={<SyncOutlined />} loading={loading} onClick={handleConvert}>
-            {t(titleKey)}
-          </Button>
-        </Space>
-      );
+    const handleConvert = async () => {
+      if (!file) return message.warning('请选择文件');
+      setLoading(true);
+      try {
+        const outPath = output || file.replace(/\.[^.]+$/, op.ext === '(dir)' ? '' : op.ext);
+        const params = op.key === 'excelToCsv'
+          ? { input_file: file, output_dir: outPath }
+          : { input_file: file, output_file: outPath };
+        const result = await invokeCmd<PyResult>(op.cmd, params);
+        if (result.success) message.success(`${t('common.success')}: ${result.output || outPath}`);
+        else message.error(`${t('common.error')}: ${result.error}`);
+      } finally { setLoading(false); }
     };
-    return { key, label: t(titleKey), children: <TabContent /> };
+
+    return (
+      <Space direction="vertical" style={{ width: '100%' }}>
+        {op.libreNote && (
+          <Alert message={t('convert.libreofficeNote')} type="info" showIcon />
+        )}
+        <Dragger accept={op.accept} maxCount={1}
+          beforeUpload={(f) => { setFile((f as any).path || f.name); return false; }}>
+          <p className="ant-upload-hint">{t('common.dragHint')}</p>
+          <Text type="secondary">{t('common.supportedFormats')}: {op.accept}</Text>
+        </Dragger>
+        <Input placeholder={t('common.outputFile')} value={output}
+          onChange={(e) => setOutput(e.target.value)} addonAfter={op.ext} />
+        <Button type="primary" icon={<SyncOutlined />} loading={loading} onClick={handleConvert}>
+          {t(op.titleKey)}
+        </Button>
+      </Space>
+    );
   };
 
-  // Images to PDF tab needs multi-file support
+  /* Images to PDF — multi-file */
   const ImagesToPdfTab = () => {
     const [files, setFiles] = useState<string[]>([]);
     const [output, setOutput] = useState('');
@@ -76,26 +75,16 @@ const ConvertPage: React.FC = () => {
       if (!output) return message.warning('请指定输出路径');
       setLoading(true);
       try {
-        const result = await invokeCmd<PyResult>('convert_images_to_pdf', {
-          input_files: files, output_file: output,
-        });
-        if (result.success) {
-          message.success(`${t('common.success')}: ${result.output}`);
-        } else {
-          message.error(result.error);
-        }
-      } finally {
-        setLoading(false);
-      }
+        const result = await invokeCmd<PyResult>('convert_images_to_pdf', { input_files: files, output_file: output });
+        if (result.success) message.success(`${t('common.success')}: ${result.output}`);
+        else message.error(result.error);
+      } finally { setLoading(false); }
     };
 
     return (
       <Space direction="vertical" style={{ width: '100%' }}>
-        <Dragger
-          multiple
-          accept=".jpg,.jpeg,.png,.bmp,.tiff,.webp"
-          beforeUpload={(f) => { setFiles(prev => [...prev, (f as any).path || f.name]); return false; }}
-        >
+        <Dragger multiple accept=".jpg,.jpeg,.png,.bmp,.tiff,.webp"
+          beforeUpload={(f) => { setFiles(prev => [...prev, (f as any).path || f.name]); return false; }}>
           <p className="ant-upload-hint">{t('common.dragHint')}</p>
           <Text type="secondary">JPG, PNG, BMP, TIFF, WebP</Text>
         </Dragger>
@@ -108,30 +97,58 @@ const ConvertPage: React.FC = () => {
     );
   };
 
-  const libreNote = <Alert message={t('convert.libreofficeNote')} type="info" showIcon style={{ marginBottom: 8 }} />;
+  const renderContent = () => {
+    if (activeOp === 'imagesToPdf') return <ImagesToPdfTab />;
+    const op = OPERATIONS.find(o => o.key === activeOp);
+    if (!op) return null;
+    return <GenericTab op={op} />;
+  };
 
-  const tabs = [
-    makeTab('wordToPdf', 'convert.wordToPdf', '.docx,.doc', 'convert_word_to_pdf',
-      (f, o) => ({ input_file: f, output_file: o }), '.pdf', libreNote),
-    makeTab('excelToPdf', 'convert.excelToPdf', '.xlsx,.xls', 'convert_excel_to_pdf',
-      (f, o) => ({ input_file: f, output_file: o }), '.pdf', libreNote),
-    makeTab('pptxToPdf', 'convert.pptxToPdf', '.pptx,.ppt', 'convert_pptx_to_pdf',
-      (f, o) => ({ input_file: f, output_file: o }), '.pdf', libreNote),
-    makeTab('pdfToMarkdown', 'convert.pdfToMarkdown', '.pdf', 'convert_pdf_to_markdown',
-      (f, o) => ({ input_file: f, output_file: o }), '.md'),
-    { key: 'imagesToPdf', label: t('convert.imagesToPdf'), children: <ImagesToPdfTab /> },
-    makeTab('htmlToPdf', 'convert.htmlToPdf', '.html,.htm', 'convert_html_to_pdf',
-      (f, o) => ({ input_file: f, output_file: o }), '.pdf'),
-    makeTab('excelToCsv', 'convert.excelToCsv', '.xlsx,.xls', 'convert_excel_to_csv',
-      (f, o) => ({ input_file: f, output_dir: o.replace('.csv', '') }), '(dir)'),
-  ];
+  const currentOp = OPERATIONS.find(o => o.key === activeOp)!;
 
   return (
-    <Card>
-      <Title level={4}><SyncOutlined /> {t('convert.title')}</Title>
-      <Tabs items={tabs} />
-    </Card>
+    <div className="tool-page">
+      {/* Left operation list */}
+      <div className="tool-nav">
+        <div className="tool-nav-header">
+          <SyncOutlined className="tool-nav-icon" />
+          格式转换
+        </div>
+        <div className="tool-nav-list">
+          {OPERATIONS.map(op => (
+            <div
+              key={op.key}
+              className={`tool-nav-item ${activeOp === op.key ? 'active' : ''}`}
+              onClick={() => setActiveOp(op.key)}
+              style={{ '--op-color': op.color } as React.CSSProperties}
+            >
+              <span className="tni-icon">{op.icon}</span>
+              <span>{t(op.titleKey)}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Right content panel */}
+      <div className="tool-panel">
+        <div className="tool-panel-header">
+          <div
+            className="tool-panel-icon"
+            style={{ background: currentOp.colorBg, color: currentOp.color }}
+          >
+            {currentOp.icon}
+          </div>
+          <div>
+            <div className="tool-panel-title">{t(currentOp.titleKey)}</div>
+          </div>
+        </div>
+        <div className="tool-panel-body">
+          {renderContent()}
+        </div>
+      </div>
+    </div>
   );
 };
 
 export default ConvertPage;
+

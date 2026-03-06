@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import {
-  Tabs, Card, Upload, Button, Input, InputNumber, Select,
+  Upload, Button, Input, InputNumber, Select,
   Slider, message, Typography, Space, Row, Col, Tag,
 } from 'antd';
 import {
@@ -14,12 +14,26 @@ import { useTranslation } from 'react-i18next';
 import { invokeCmd, PyResult } from '../../hooks/useInvoke';
 import BruteforcePanel from './BruteforcePanel';
 
-const { Title, Text } = Typography;
+const { Text } = Typography;
 const { Dragger } = Upload;
+
+/* ── Operation definitions ─────────────────────────── */
+const OPERATIONS = [
+  { key: 'merge',       icon: <MergeCellsOutlined />, color: '#4D84FF',  colorBg: 'rgba(77,132,255,0.12)' },
+  { key: 'split',       icon: <ScissorOutlined />,    color: '#34C48A',  colorBg: 'rgba(52,196,138,0.12)' },
+  { key: 'encrypt',     icon: <LockOutlined />,       color: '#FBBF24',  colorBg: 'rgba(251,191,36,0.12)'  },
+  { key: 'decrypt',     icon: <UnlockOutlined />,     color: '#34C48A',  colorBg: 'rgba(52,196,138,0.12)' },
+  { key: 'bruteforce',  icon: <ThunderboltOutlined />,color: '#F56776',  colorBg: 'rgba(245,103,118,0.12)' },
+  { key: 'compress',    icon: <CompressOutlined />,   color: '#A78BFA',  colorBg: 'rgba(167,139,250,0.12)' },
+  { key: 'watermark',   icon: <FontSizeOutlined />,   color: '#22D3EE',  colorBg: 'rgba(34,211,238,0.12)'  },
+  { key: 'pageNumbers', icon: <NumberOutlined />,     color: '#F0883E',  colorBg: 'rgba(240,136,62,0.12)'  },
+  { key: 'toDocx',      icon: <FileWordOutlined />,   color: '#34C48A',  colorBg: 'rgba(52,196,138,0.12)'  },
+];
 
 const PDFPage: React.FC = () => {
   const { t } = useTranslation();
   const [loading, setLoading] = useState(false);
+  const [activeOp, setActiveOp] = useState('merge');
 
   const handleResult = (result: PyResult, successMsg?: string) => {
     if (result.success) {
@@ -29,7 +43,7 @@ const PDFPage: React.FC = () => {
     }
   };
 
-  // ── Merge ──────────────────────────────────────────────────────────────────
+  // ── Merge ──────────────────────────────────────────
   const MergeTab = () => {
     const [files, setFiles] = useState<string[]>([]);
     const [output, setOutput] = useState('');
@@ -39,42 +53,30 @@ const PDFPage: React.FC = () => {
       if (!output) return message.warning('请指定输出文件路径');
       setLoading(true);
       try {
-        const result = await invokeCmd<PyResult>('pdf_merge', {
-          input_files: files,
-          output_file: output,
-        });
+        const result = await invokeCmd<PyResult>('pdf_merge', { input_files: files, output_file: output });
         handleResult(result);
-      } finally {
-        setLoading(false);
-      }
+      } finally { setLoading(false); }
     };
 
     return (
       <Space direction="vertical" style={{ width: '100%' }}>
         <Text type="secondary">{t('pdf.merge.desc')}</Text>
-        <Dragger
-          multiple
-          accept=".pdf"
-          beforeUpload={(file) => {
-            setFiles((prev) => [...prev, (file as any).path || file.name]);
-            return false;
-          }}
-          onRemove={() => setFiles([])}
-        >
+        <Dragger multiple accept=".pdf"
+          beforeUpload={(file) => { setFiles((prev) => [...prev, (file as any).path || file.name]); return false; }}
+          onRemove={() => setFiles([])}>
           <p className="ant-upload-hint">{t('common.dragHint')}</p>
           <Text type="secondary">{t('common.supportedFormats')}: PDF</Text>
         </Dragger>
         {files.length > 0 && (
           <Space wrap>
-            {files.map((f, i) => <Tag key={i} closable onClose={() => setFiles(prev => prev.filter((_, j) => j !== i))}>{f.split('/').pop()}</Tag>)}
+            {files.map((f, i) => (
+              <Tag key={i} closable onClose={() => setFiles(prev => prev.filter((_, j) => j !== i))}>
+                {f.split('/').pop()}
+              </Tag>
+            ))}
           </Space>
         )}
-        <Input
-          placeholder={t('common.outputFile')}
-          value={output}
-          onChange={(e) => setOutput(e.target.value)}
-          addonAfter=".pdf"
-        />
+        <Input placeholder={t('common.outputFile')} value={output} onChange={(e) => setOutput(e.target.value)} addonAfter=".pdf" />
         <Button type="primary" icon={<MergeCellsOutlined />} loading={loading} onClick={handleMerge}>
           {t('pdf.merge.title')}
         </Button>
@@ -82,19 +84,15 @@ const PDFPage: React.FC = () => {
     );
   };
 
-  // ── Split ──────────────────────────────────────────────────────────────────
+  // ── Split ──────────────────────────────────────────
   const SplitTab = () => {
     const [file, setFile] = useState('');
     const [outputDir, setOutputDir] = useState('');
     const [mode, setMode] = useState<'all' | 'range'>('all');
     const [ranges, setRanges] = useState('');
 
-    const parseRanges = (str: string): number[][] => {
-      return str.split(',').map(part => {
-        const [s, e] = part.trim().split('-').map(Number);
-        return [s, e ?? s];
-      });
-    };
+    const parseRanges = (str: string): number[][] =>
+      str.split(',').map(part => { const [s, e] = part.trim().split('-').map(Number); return [s, e ?? s]; });
 
     const handleSplit = async () => {
       if (!file) return message.warning('请选择 PDF 文件');
@@ -102,18 +100,11 @@ const PDFPage: React.FC = () => {
       setLoading(true);
       try {
         const params: Record<string, unknown> = { input_file: file, output_dir: outputDir };
-        if (mode === 'range' && ranges) {
-          params.ranges = parseRanges(ranges);
-        }
+        if (mode === 'range' && ranges) params.ranges = parseRanges(ranges);
         const result = await invokeCmd<PyResult & { outputs?: string[] }>('pdf_split', params);
-        if (result.success) {
-          message.success(`拆分完成，生成 ${result.outputs?.length ?? 0} 个文件`);
-        } else {
-          message.error(result.error);
-        }
-      } finally {
-        setLoading(false);
-      }
+        if (result.success) message.success(`拆分完成，生成 ${result.outputs?.length ?? 0} 个文件`);
+        else message.error(result.error);
+      } finally { setLoading(false); }
     };
 
     return (
@@ -124,11 +115,7 @@ const PDFPage: React.FC = () => {
         </Dragger>
         <Input placeholder={t('common.outputFile')} value={outputDir} onChange={(e) => setOutputDir(e.target.value)} />
         <Select value={mode} onChange={setMode} style={{ width: 200 }}
-          options={[
-            { value: 'all', label: t('pdf.split.allPages') },
-            { value: 'range', label: t('pdf.split.byRange') },
-          ]}
-        />
+          options={[{ value: 'all', label: t('pdf.split.allPages') }, { value: 'range', label: t('pdf.split.byRange') }]} />
         {mode === 'range' && (
           <Input placeholder={t('pdf.split.ranges')} value={ranges} onChange={(e) => setRanges(e.target.value)} />
         )}
@@ -139,7 +126,7 @@ const PDFPage: React.FC = () => {
     );
   };
 
-  // ── Encrypt ────────────────────────────────────────────────────────────────
+  // ── Encrypt ────────────────────────────────────────
   const EncryptTab = () => {
     const [file, setFile] = useState('');
     const [output, setOutput] = useState('');
@@ -152,11 +139,11 @@ const PDFPage: React.FC = () => {
       if (pwd !== confirm) return message.error(t('pdf.encrypt.passwordMismatch'));
       setLoading(true);
       try {
-        const result = await invokeCmd<PyResult>('pdf_encrypt', { input_file: file, output_file: output || file.replace('.pdf', '_encrypted.pdf'), password: pwd });
+        const result = await invokeCmd<PyResult>('pdf_encrypt', {
+          input_file: file, output_file: output || file.replace('.pdf', '_encrypted.pdf'), password: pwd,
+        });
         handleResult(result);
-      } finally {
-        setLoading(false);
-      }
+      } finally { setLoading(false); }
     };
 
     return (
@@ -175,7 +162,7 @@ const PDFPage: React.FC = () => {
     );
   };
 
-  // ── Decrypt ────────────────────────────────────────────────────────────────
+  // ── Decrypt ────────────────────────────────────────
   const DecryptTab = () => {
     const [file, setFile] = useState('');
     const [output, setOutput] = useState('');
@@ -185,11 +172,11 @@ const PDFPage: React.FC = () => {
       if (!file || !pwd) return message.warning('请选择文件并输入密码');
       setLoading(true);
       try {
-        const result = await invokeCmd<PyResult>('pdf_decrypt', { input_file: file, output_file: output || file.replace('.pdf', '_decrypted.pdf'), password: pwd });
+        const result = await invokeCmd<PyResult>('pdf_decrypt', {
+          input_file: file, output_file: output || file.replace('.pdf', '_decrypted.pdf'), password: pwd,
+        });
         handleResult(result);
-      } finally {
-        setLoading(false);
-      }
+      } finally { setLoading(false); }
     };
 
     return (
@@ -207,7 +194,7 @@ const PDFPage: React.FC = () => {
     );
   };
 
-  // ── Compress ───────────────────────────────────────────────────────────────
+  // ── Compress ───────────────────────────────────────
   const CompressTab = () => {
     const [file, setFile] = useState('');
     const [output, setOutput] = useState('');
@@ -218,18 +205,11 @@ const PDFPage: React.FC = () => {
       setLoading(true);
       try {
         const res = await invokeCmd<PyResult & { original_size?: number; compressed_size?: number; ratio?: number }>('pdf_compress', {
-          input_file: file,
-          output_file: output || file.replace('.pdf', '_compressed.pdf'),
+          input_file: file, output_file: output || file.replace('.pdf', '_compressed.pdf'),
         });
-        if (res.success) {
-          setResult(res);
-          message.success(t('common.success'));
-        } else {
-          message.error(res.error);
-        }
-      } finally {
-        setLoading(false);
-      }
+        if (res.success) { setResult(res); message.success(t('common.success')); }
+        else message.error(res.error);
+      } finally { setLoading(false); }
     };
 
     const fmt = (b?: number) => b ? (b / 1024).toFixed(1) + ' KB' : '-';
@@ -255,7 +235,7 @@ const PDFPage: React.FC = () => {
     );
   };
 
-  // ── Watermark ──────────────────────────────────────────────────────────────
+  // ── Watermark ──────────────────────────────────────
   const WatermarkTab = () => {
     const [file, setFile] = useState('');
     const [output, setOutput] = useState('');
@@ -269,14 +249,11 @@ const PDFPage: React.FC = () => {
       setLoading(true);
       try {
         const result = await invokeCmd<PyResult>('pdf_watermark', {
-          input_file: file,
-          output_file: output || file.replace('.pdf', '_watermarked.pdf'),
+          input_file: file, output_file: output || file.replace('.pdf', '_watermarked.pdf'),
           text, font_size: fontSize, opacity, color,
         });
         handleResult(result);
-      } finally {
-        setLoading(false);
-      }
+      } finally { setLoading(false); }
     };
 
     return (
@@ -298,8 +275,7 @@ const PDFPage: React.FC = () => {
           </Col>
           <Col span={8}>
             <Select value={color} onChange={setColor} style={{ width: '100%' }}
-              options={['gray', 'red', 'blue', 'black'].map(c => ({ value: c, label: t(`pdf.watermark.colors.${c}`) }))}
-            />
+              options={['gray', 'red', 'blue', 'black'].map(c => ({ value: c, label: t(`pdf.watermark.colors.${c}`) }))} />
           </Col>
         </Row>
         <Button type="primary" icon={<FontSizeOutlined />} loading={loading} onClick={handleWatermark}>
@@ -309,7 +285,7 @@ const PDFPage: React.FC = () => {
     );
   };
 
-  // ── Page Numbers ───────────────────────────────────────────────────────────
+  // ── Page Numbers ───────────────────────────────────
   const PageNumbersTab = () => {
     const [file, setFile] = useState('');
     const [output, setOutput] = useState('');
@@ -322,14 +298,11 @@ const PDFPage: React.FC = () => {
       setLoading(true);
       try {
         const result = await invokeCmd<PyResult>('pdf_page_numbers', {
-          input_file: file,
-          output_file: output || file.replace('.pdf', '_numbered.pdf'),
+          input_file: file, output_file: output || file.replace('.pdf', '_numbered.pdf'),
           position, start, font_size: fontSize,
         });
         handleResult(result);
-      } finally {
-        setLoading(false);
-      }
+      } finally { setLoading(false); }
     };
 
     return (
@@ -344,8 +317,7 @@ const PDFPage: React.FC = () => {
             <Select value={position} onChange={setPosition} style={{ width: '100%' }}
               options={['bottom-center', 'bottom-right', 'bottom-left', 'top-center'].map(p => ({
                 value: p, label: t(`pdf.pageNumbers.positions.${p}`)
-              }))}
-            />
+              }))} />
           </Col>
           <Col span={6}>
             <InputNumber min={1} value={start} onChange={(v) => setStart(v ?? 1)}
@@ -363,7 +335,7 @@ const PDFPage: React.FC = () => {
     );
   };
 
-  // ── PDF to DOCX ────────────────────────────────────────────────────────────
+  // ── PDF to DOCX ────────────────────────────────────
   const ToDocxTab = () => {
     const [file, setFile] = useState('');
     const [output, setOutput] = useState('');
@@ -373,13 +345,10 @@ const PDFPage: React.FC = () => {
       setLoading(true);
       try {
         const result = await invokeCmd<PyResult>('pdf_to_docx', {
-          input_file: file,
-          output_file: output || file.replace('.pdf', '.docx'),
+          input_file: file, output_file: output || file.replace('.pdf', '.docx'),
         });
         handleResult(result);
-      } finally {
-        setLoading(false);
-      }
+      } finally { setLoading(false); }
     };
 
     return (
@@ -396,28 +365,79 @@ const PDFPage: React.FC = () => {
     );
   };
 
-  const tabs = [
-    { key: 'merge', label: t('pdf.merge.title'), children: <MergeTab /> },
-    { key: 'split', label: t('pdf.split.title'), children: <SplitTab /> },
-    { key: 'encrypt', label: t('pdf.encrypt.title'), children: <EncryptTab /> },
-    { key: 'decrypt', label: t('pdf.decrypt.title'), children: <DecryptTab /> },
-    {
-      key: 'bruteforce',
-      label: <span><ThunderboltOutlined /> 暴力破解</span>,
-      children: <BruteforcePanel />,
-    },
-    { key: 'compress', label: t('pdf.compress.title'), children: <CompressTab /> },
-    { key: 'watermark', label: t('pdf.watermark.title'), children: <WatermarkTab /> },
-    { key: 'pageNumbers', label: t('pdf.pageNumbers.title'), children: <PageNumbersTab /> },
-    { key: 'toDocx', label: t('pdf.toDocx.title'), children: <ToDocxTab /> },
-  ];
+  /* ── Operation label map ─────────────────────────── */
+  const opLabels: Record<string, string> = {
+    merge: t('pdf.merge.title'),
+    split: t('pdf.split.title'),
+    encrypt: t('pdf.encrypt.title'),
+    decrypt: t('pdf.decrypt.title'),
+    bruteforce: '暴力破解',
+    compress: t('pdf.compress.title'),
+    watermark: t('pdf.watermark.title'),
+    pageNumbers: t('pdf.pageNumbers.title'),
+    toDocx: t('pdf.toDocx.title'),
+  };
+
+  const renderContent = () => {
+    switch (activeOp) {
+      case 'merge':       return <MergeTab />;
+      case 'split':       return <SplitTab />;
+      case 'encrypt':     return <EncryptTab />;
+      case 'decrypt':     return <DecryptTab />;
+      case 'bruteforce':  return <BruteforcePanel />;
+      case 'compress':    return <CompressTab />;
+      case 'watermark':   return <WatermarkTab />;
+      case 'pageNumbers': return <PageNumbersTab />;
+      case 'toDocx':      return <ToDocxTab />;
+      default:            return null;
+    }
+  };
+
+  const currentOp = OPERATIONS.find(o => o.key === activeOp)!;
 
   return (
-    <Card>
-      <Title level={4}><FilePdfOutlined /> {t('nav.pdf')}</Title>
-      <Tabs items={tabs} />
-    </Card>
+    <div className="tool-page">
+      {/* Left operation list */}
+      <div className="tool-nav">
+        <div className="tool-nav-header">
+          <FilePdfOutlined className="tool-nav-icon" />
+          PDF 工具
+        </div>
+        <div className="tool-nav-list">
+          {OPERATIONS.map(op => (
+            <div
+              key={op.key}
+              className={`tool-nav-item ${activeOp === op.key ? 'active' : ''}`}
+              onClick={() => setActiveOp(op.key)}
+              style={{ '--op-color': op.color } as React.CSSProperties}
+            >
+              <span className="tni-icon">{op.icon}</span>
+              <span>{opLabels[op.key]}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Right content panel */}
+      <div className="tool-panel">
+        <div className="tool-panel-header">
+          <div
+            className="tool-panel-icon"
+            style={{ background: currentOp.colorBg, color: currentOp.color }}
+          >
+            {currentOp.icon}
+          </div>
+          <div>
+            <div className="tool-panel-title">{opLabels[activeOp]}</div>
+          </div>
+        </div>
+        <div className="tool-panel-body">
+          {renderContent()}
+        </div>
+      </div>
+    </div>
   );
 };
 
 export default PDFPage;
+

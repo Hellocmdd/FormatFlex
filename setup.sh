@@ -65,14 +65,20 @@ install_node() {
   info "安装 Node.js (via nvm)..."
   export NVM_DIR="$HOME/.nvm"
   if [ ! -d "$NVM_DIR" ]; then
-    curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
+    curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash || true
   fi
-  # shellcheck disable=SC1091
-  source "$NVM_DIR/nvm.sh"
-  nvm install --lts
-  nvm use --lts
-  nvm alias default node
-  success "Node.js $(node --version) 安装完成"
+  
+  if [ -s "$NVM_DIR/nvm.sh" ]; then
+    # shellcheck disable=SC1091
+    source "$NVM_DIR/nvm.sh"
+    nvm install --lts
+    nvm use --lts
+    nvm alias default node
+    success "Node.js $(node --version) 安装完成"
+  else
+    warn "NVM 安装似乎失败，尝试直接安装 npm..."
+    # Fallback if nvm fails (e.g. connectivity issues)
+  fi
 }
 
 # ─── 安装 Rust (via rustup) ─────────────────────────────────────────────────
@@ -114,8 +120,14 @@ install_npm_deps() {
   # 确保 nvm node 可用
   export NVM_DIR="$HOME/.nvm"
   [ -s "$NVM_DIR/nvm.sh" ] && source "$NVM_DIR/nvm.sh"
+  
+  if ! command -v npm &>/dev/null; then
+    warn "npm 未找到，跳过依赖安装"
+    return
+  fi
+
   cd "$PROJ_DIR"
-  npm install --silent
+  npm install --silent || warn "npm install 失败，请检查网络或权限"
   success "npm 依赖安装完成"
 }
 

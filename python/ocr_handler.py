@@ -47,6 +47,58 @@ def ocr_baidu(image_path: str, app_id: str, api_key: str, secret_key: str,
         return {"success": False, "error": str(e), "source": "baidu"}
 
 
+
+def ocr_glm(image_path: str, api_key: str) -> dict:
+    """Extract text using GLM-4V (ZhipuAI)."""
+    try:
+        import base64
+        import requests
+
+        with open(image_path, "rb") as f:
+            base64_image = base64.b64encode(f.read()).decode('utf-8')
+
+        url = "https://open.bigmodel.cn/api/paas/v4/chat/completions"
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {api_key}"
+        }
+        
+        payload = {
+            "model": "glm-4v",
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": "Identify all text in the image and output it directly without any explanation."
+                        },
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": base64_image
+                            }
+                        }
+                    ]
+                }
+            ]
+        }
+        
+        response = requests.post(url, headers=headers, json=payload)
+        response.raise_for_status()
+        res_json = response.json()
+        
+        text = res_json["choices"][0]["message"]["content"]
+        
+        return {
+            "success": True,
+            "text": text,
+            "source": "glm"
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e), "source": "glm"}
+
+
 def ocr_pdf(pdf_path: str, lang: str = "chi_sim+eng",
             provider: str = "local", credentials: dict = None) -> dict:
     """Extract text from each page of a PDF using OCR."""
@@ -72,6 +124,8 @@ def ocr_pdf(pdf_path: str, lang: str = "chi_sim+eng",
 
             if provider == "baidu" and credentials:
                 r = ocr_baidu(tmp_path, **credentials)
+            elif provider == "glm" and credentials:
+                r = ocr_glm(tmp_path, api_key=credentials.get("api_key"))
             else:
                 r = ocr_local(tmp_path, lang=lang)
 
@@ -93,6 +147,8 @@ def ocr_batch(image_paths: list, lang: str = "chi_sim+eng",
     for path in image_paths:
         if provider == "baidu" and credentials:
             r = ocr_baidu(path, **credentials)
+        elif provider == "glm" and credentials:
+            r = ocr_glm(path, api_key=credentials.get("api_key"))
         else:
             r = ocr_local(path, lang=lang)
         results.append({"file": path, **r})
@@ -102,6 +158,7 @@ def ocr_batch(image_paths: list, lang: str = "chi_sim+eng",
 OPERATIONS = {
     "local": ocr_local,
     "baidu": ocr_baidu,
+    "glm": ocr_glm,
     "pdf": ocr_pdf,
     "batch": ocr_batch,
 }

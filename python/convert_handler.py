@@ -41,7 +41,7 @@ def pptx_to_pdf(input_file: str, output_file: str) -> dict:
 
 def pdf_to_markdown(input_file: str, output_file: str) -> dict:
     """Convert PDF to Markdown by extracting text."""
-    from PyPDF2 import PdfReader
+    from pypdf import PdfReader
     try:
         reader = PdfReader(input_file)
         lines = []

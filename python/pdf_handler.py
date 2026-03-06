@@ -11,10 +11,10 @@ from pathlib import Path
 
 def merge_pdfs(input_files: list, output_file: str) -> dict:
     """Merge multiple PDFs into one."""
-    from PyPDF2 import PdfWriter
+    from pypdf import PdfWriter
     writer = PdfWriter()
     try:
-        from PyPDF2 import PdfReader
+        from pypdf import PdfReader
         for f in input_files:
             reader = PdfReader(f)
             for page in reader.pages:
@@ -28,7 +28,7 @@ def merge_pdfs(input_files: list, output_file: str) -> dict:
 
 def split_pdf(input_file: str, output_dir: str, ranges: list = None) -> dict:
     """Split PDF into individual pages or by ranges."""
-    from PyPDF2 import PdfReader, PdfWriter
+    from pypdf import PdfReader, PdfWriter
     try:
         reader = PdfReader(input_file)
         total_pages = len(reader.pages)
@@ -61,7 +61,7 @@ def split_pdf(input_file: str, output_dir: str, ranges: list = None) -> dict:
 
 def encrypt_pdf(input_file: str, output_file: str, password: str) -> dict:
     """Encrypt PDF with password."""
-    from PyPDF2 import PdfReader, PdfWriter
+    from pypdf import PdfReader, PdfWriter
     try:
         reader = PdfReader(input_file)
         writer = PdfWriter()
@@ -77,7 +77,7 @@ def encrypt_pdf(input_file: str, output_file: str, password: str) -> dict:
 
 def decrypt_pdf(input_file: str, output_file: str, password: str) -> dict:
     """Decrypt password-protected PDF."""
-    from PyPDF2 import PdfReader, PdfWriter
+    from pypdf import PdfReader, PdfWriter
     try:
         reader = PdfReader(input_file)
         if reader.is_encrypted:
@@ -94,7 +94,7 @@ def decrypt_pdf(input_file: str, output_file: str, password: str) -> dict:
 
 def compress_pdf(input_file: str, output_file: str) -> dict:
     """Compress PDF by removing redundant data."""
-    from PyPDF2 import PdfReader, PdfWriter
+    from pypdf import PdfReader, PdfWriter
     try:
         reader = PdfReader(input_file)
         writer = PdfWriter()
@@ -120,7 +120,7 @@ def add_watermark(input_file: str, output_file: str, text: str,
                   font_size: int = 40, opacity: float = 0.3,
                   color: str = "gray") -> dict:
     """Add text watermark to each PDF page."""
-    from PyPDF2 import PdfReader, PdfWriter
+    from pypdf import PdfReader, PdfWriter
     from reportlab.pdfgen import canvas
     from reportlab.lib.pagesizes import A4
     from reportlab.lib import colors
@@ -150,7 +150,7 @@ def add_watermark(input_file: str, output_file: str, text: str,
             c.restoreState()
             c.save()
             packet.seek(0)
-            from PyPDF2 import PdfReader as PR
+            from pypdf import PdfReader as PR
             watermark_page = PR(packet).pages[0]
             page.merge_page(watermark_page)
             writer.add_page(page)
@@ -166,7 +166,7 @@ def add_page_numbers(input_file: str, output_file: str,
                      position: str = "bottom-center",
                      start: int = 1, font_size: int = 12) -> dict:
     """Add page numbers to PDF."""
-    from PyPDF2 import PdfReader, PdfWriter
+    from pypdf import PdfReader, PdfWriter
     from reportlab.pdfgen import canvas
     import io
     try:
@@ -191,7 +191,7 @@ def add_page_numbers(input_file: str, output_file: str,
 
             c.save()
             packet.seek(0)
-            from PyPDF2 import PdfReader as PR
+            from pypdf import PdfReader as PR
             num_page = PR(packet).pages[0]
             page.merge_page(num_page)
             writer.add_page(page)
@@ -217,7 +217,7 @@ def pdf_to_docx(input_file: str, output_file: str) -> dict:
 
 def get_pdf_info(input_file: str) -> dict:
     """Get PDF metadata and info."""
-    from PyPDF2 import PdfReader
+    from pypdf import PdfReader
     try:
         reader = PdfReader(input_file)
         meta = reader.metadata or {}
@@ -250,7 +250,7 @@ def _bf_init(shm_name: str, shm_size: int):
     """Pool worker initializer: load PDF once per process via shared memory."""
     global _bf_reader
     from multiprocessing.shared_memory import SharedMemory
-    from PyPDF2 import PdfReader
+    from pypdf import PdfReader
     shm = SharedMemory(name=shm_name)
     data = bytes(shm.buf[:shm_size])
     shm.close()
@@ -299,7 +299,7 @@ def bruteforce_pdf(pdf_path: str,
     import multiprocessing
     import itertools
     from multiprocessing.shared_memory import SharedMemory
-    from PyPDF2 import PdfReader
+    from pypdf import PdfReader
 
     # ── Validate ──────────────────────────────────────────────────────────────
     if not os.path.exists(pdf_path):
