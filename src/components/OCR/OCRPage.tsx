@@ -1,11 +1,18 @@
 import React, { useState } from 'react';
 import {
-  Upload, Button, Select, Switch, Input, message,
-  Typography, Space, Row, Col, Tabs, Spin,
+  Alert, Upload, Button, Select, Input, message, Tag, Segmented,
+  Typography, Space, Row, Col, Spin,
 } from 'antd';
-import { ScanOutlined, CopyOutlined, FileTextOutlined } from '@ant-design/icons';
+import { CopyOutlined, FileSearchOutlined, ReadOutlined, PlayCircleOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
+import rehypeRaw from 'rehype-raw';
 import { invokeCmd, PyResult } from '../../hooks/useInvoke';
+import { ensureSingleLocalPath, pickSinglePath } from '../../utils/filePicker';
 
 const { Text } = Typography;
 const { Dragger } = Upload;
@@ -19,147 +26,62 @@ interface OCRResult extends PyResult {
 
 const OCRPage: React.FC = () => {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState('');
+  const [isGlmResult, setIsGlmResult] = useState(false);
+  const [glmViewMode, setGlmViewMode] = useState<'rendered' | 'source'>('rendered');
 
-  const baiduCreds = () => ({
-    app_id: localStorage.getItem('baidu_app_id') || '',
-    api_key: localStorage.getItem('baidu_api_key') || '',
-    secret_key: localStorage.getItem('baidu_secret_key') || '',
-  });
+  const fileBaseName = (path: string) => path.split('/').pop() || path;
+  const SelectedFileTag = ({ path }: { path: string }) => (
+    path ? <Tag className="pdf-selected-file">{t('common.selectedFile')}: {fileBaseName(path)}</Tag> : null
+  );
 
-  // ── Single Image OCR ───────────────────────────────
-  const SingleOCR = () => {
-    const [provider, setProvider] = useState<'local' | 'baidu' | 'glm'>('local');
-    const [lang, setLang] = useState('chi_sim+eng');
-    const [accurate, setAccurate] = useState(false);
-    const [file, setFile] = useState('');
+  const [provider, setProvider] = useState<'local' | 'glm'>('local');
+  const [lang, setLang] = useState('chi_sim+eng');
+  const [file, setFile] = useState('');
+  const hasGlmKey = !!localStorage.getItem('glm_api_key')?.trim();
 
-    const handleOCR = async () => {
-      if (!file) return message.warning('请选择图片文件');
-      setLoading(true); setResult('');
-      try {
-        let res: OCRResult;
-        if (provider === 'baidu') {
-          const creds = baiduCreds();
-          if (!creds.app_id) return message.error('请先在设置中配置百度 OCR API Key');
-          res = await invokeCmd<OCRResult>('ocr_baidu', { image_path: file, ...creds, accurate });
-        } else if (provider === 'glm') {
-          const apiKey = localStorage.getItem('glm_api_key');
-          if (!apiKey) return message.error('请先在设置中配置 GLM API Key');
-          res = await invokeCmd<OCRResult>('ocr_glm', { image_path: file, api_key: apiKey });
-        } else {
-          res = await invokeCmd<OCRResult>('ocr_local', { image_path: file, lang });
-        }
-        if (res.success) setResult(res.text || '');
-        else message.error(res.error);
-      } finally { setLoading(false); }
-    };
+  const handleOCR = async () => {
+    if (!file) return message.warning('请选择要识别的文件（图片或 PDF）');
+    setLoading(true);
+    setResult('');
+    setIsGlmResult(false);
+    setGlmViewMode('rendered');
 
-    return (
-      <Space direction="vertical" style={{ width: '100%' }}>
-        <Row gutter={12}>
-          <Col span={8}>
-            <Select value={provider} onChange={setProvider} style={{ width: '100%' }}
-              options={[
-                { value: 'local', label: t('ocr.local') },
-                { value: 'baidu', label: t('ocr.baidu') },
-                { value: 'glm', label: 'GLM-OCR' },
-              ]} />
-          </Col>
-          {provider === 'local' && (
-            <Col span={10}>
-              <Select value={lang} onChange={setLang} style={{ width: '100%' }}
-                options={Object.entries({
-                  'chi_sim+eng': t('ocr.langs.chi_sim+eng'),
-                  'chi_sim': t('ocr.langs.chi_sim'),
-                  'eng': t('ocr.langs.eng'),
-                }).map(([v, l]) => ({ value: v, label: l }))} />
-            </Col>
-          )}
-          {provider === 'baidu' && (
-            <Col span={10}>
-              <Space>
-                <Switch checked={accurate} onChange={setAccurate} />
-                <Text>{t('ocr.accurate')}</Text>
-              </Space>
-            </Col>
-          )}
-        </Row>
-        <Dragger accept=".jpg,.jpeg,.png,.bmp,.tiff,.webp,.gif" maxCount={1}
-          beforeUpload={(f) => { setFile((f as any).path || f.name); return false; }}>
-          <p className="ant-upload-hint">{t('common.dragHint')}</p>
-          <Text type="secondary">JPG, PNG, BMP, TIFF, WebP</Text>
-        </Dragger>
-        <Button type="primary" icon={<ScanOutlined />} loading={loading} onClick={handleOCR}>
-          {t('common.process')}
-        </Button>
-      </Space>
-    );
-  };
+    try {
+      const params: Record<string, unknown> = {
+        input_path: file,
+        provider,
+        lang,
+      };
 
-  // ── PDF OCR ────────────────────────────────────────
-  const PdfOCR = () => {
-    const [provider, setProvider] = useState<'local' | 'baidu' | 'glm'>('local');
-    const [lang, setLang] = useState('chi_sim+eng');
-    const [file, setFile] = useState('');
+      if (provider === 'glm') {
+        const apiKey = localStorage.getItem('glm_api_key');
+        if (!apiKey) return message.error('请先在设置中配置 GLM API Key');
+        params.credentials = { api_key: apiKey };
+      }
 
-    const handleOCR = async () => {
-      if (!file) return message.warning('请选择 PDF 文件');
-      setLoading(true); setResult('');
-      try {
-        const params: Record<string, unknown> = { pdf_path: file, lang, provider };
-        if (provider === 'baidu') {
-          params.credentials = baiduCreds();
-        } else if (provider === 'glm') {
-          const apiKey = localStorage.getItem('glm_api_key');
-          if (!apiKey) return message.error('请先在设置中配置 GLM API Key');
-          params.credentials = { api_key: apiKey };
-        }
-        const res = await invokeCmd<OCRResult>('ocr_pdf', params);
-        if (res.success) { setResult(res.text || ''); message.success(`识别完成，共 ${res.pages} 页`); }
-        else message.error(res.error);
-      } finally { setLoading(false); }
-    };
+      const res = await invokeCmd<OCRResult>('ocr_auto', params);
+      if (!res.success) {
+        message.error(res.error);
+        return;
+      }
 
-    return (
-      <Space direction="vertical" style={{ width: '100%' }}>
-        <Row gutter={12}>
-          <Col span={8}>
-            <Select value={provider} onChange={setProvider} style={{ width: '100%' }}
-              options={[
-                { value: 'local', label: t('ocr.local') },
-                { value: 'baidu', label: t('ocr.baidu') },
-                { value: 'glm', label: 'GLM-OCR' },
-              ]} />
-          </Col>
-          <Col span={10}>
-            <Select value={lang} onChange={setLang} style={{ width: '100%' }}
-              options={Object.entries({
-                'chi_sim+eng': t('ocr.langs.chi_sim+eng'),
-                'chi_sim': t('ocr.langs.chi_sim'),
-                'eng': t('ocr.langs.eng'),
-              }).map(([v, l]) => ({ value: v, label: l }))} />
-          </Col>
-        </Row>
-        <Dragger accept=".pdf" maxCount={1}
-          beforeUpload={(f) => { setFile((f as any).path || f.name); return false; }}>
-          <p className="ant-upload-hint">{t('common.dragHint')}</p>
-        </Dragger>
-        <Button type="primary" icon={<ScanOutlined />} loading={loading} onClick={handleOCR}>
-          {t('ocr.pdfOcr')}
-        </Button>
-      </Space>
-    );
+      setResult(res.text || '');
+      const glmMode = provider === 'glm';
+      setIsGlmResult(glmMode);
+      setGlmViewMode(glmMode ? 'rendered' : 'source');
+      if (res.pages) {
+        message.success(`识别完成，共 ${res.pages} 页`);
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
   const copyResult = () =>
     navigator.clipboard.writeText(result).then(() => message.success(t('common.copied')));
-
-  const tabs = [
-    { key: 'single', label: t('ocr.title'), children: <SingleOCR /> },
-    { key: 'pdf', label: t('ocr.pdfOcr'), children: <PdfOCR /> },
-  ];
 
   return (
     <div className="ocr-page">
@@ -168,13 +90,82 @@ const OCRPage: React.FC = () => {
         <div className="panel-hd">
           <div className="panel-hd-title">
             <div className="panel-hd-icon" style={{ background: 'rgba(52,196,138,0.12)', color: '#34C48A' }}>
-              <ScanOutlined />
+              <FileSearchOutlined />
             </div>
             {t('ocr.title')}
           </div>
         </div>
         <div className="panel-bd">
-          <Tabs items={tabs} />
+          <Space direction="vertical" style={{ width: '100%' }}>
+            <Row gutter={12}>
+              <Col span={12}>
+                <Select value={provider} onChange={setProvider} style={{ width: '100%' }}
+                  options={[
+                    { value: 'local', label: t('ocr.local') },
+                    { value: 'glm', label: 'GLM-OCR' },
+                  ]} />
+              </Col>
+              <Col span={12}>
+                <Select value={lang} onChange={setLang} style={{ width: '100%' }}
+                  options={Object.entries({
+                    'chi_sim+eng': t('ocr.langs.chi_sim+eng'),
+                    'chi_sim': t('ocr.langs.chi_sim'),
+                    'eng': t('ocr.langs.eng'),
+                  }).map(([v, l]) => ({ value: v, label: l }))} />
+              </Col>
+            </Row>
+
+            {provider === 'glm' && (
+              <Alert
+                message={hasGlmKey ? t('ocr.glmNoticeReady') : t('ocr.glmNoticeMissing')}
+                description={t('ocr.glmNoticeDescription')}
+                type={hasGlmKey ? 'info' : 'warning'}
+                showIcon
+                banner
+                action={
+                  <Button size="small" onClick={() => navigate('/settings')}>
+                    {t('ocr.openSettings')}
+                  </Button>
+                }
+              />
+            )}
+
+            <div className="pdf-file-block">
+              <div onClick={async () => {
+                  const picked = await pickSinglePath({
+                    title: t('common.selectFile'),
+                    filters: [{ name: 'ocr', extensions: ['jpg', 'jpeg', 'png', 'bmp', 'tiff', 'webp', 'gif', 'pdf'] }],
+                  });
+                  if (!picked) return;
+                  setFile(picked);
+                  message.success(`${t('common.success')}: ${picked}`);
+                }}>
+                <Dragger accept=".jpg,.jpeg,.png,.bmp,.tiff,.webp,.gif,.pdf" maxCount={1} openFileDialogOnClick={false}
+                  beforeUpload={async (f) => {
+                    const p = await ensureSingleLocalPath(f, {
+                      title: t('common.selectFile'),
+                      filters: [{ name: 'ocr', extensions: ['jpg', 'jpeg', 'png', 'bmp', 'tiff', 'webp', 'gif', 'pdf'] }],
+                    });
+                    if (!p) {
+                      message.error(t('common.filePathUnavailable'));
+                      return Upload.LIST_IGNORE;
+                    }
+                    setFile(p);
+                    return false;
+                  }}>
+                  <p className="ant-upload-hint">{t('common.dragHint')}</p>
+                  <Text type="secondary">JPG, PNG, BMP, TIFF, WebP, PDF</Text>
+                </Dragger>
+              </div>
+              <div className="pdf-file-selected-slot">
+                <SelectedFileTag path={file} />
+              </div>
+            </div>
+
+            <Button type="primary" icon={<PlayCircleOutlined />} loading={loading} onClick={handleOCR}>
+              {t('common.process')}
+            </Button>
+          </Space>
         </div>
       </div>
 
@@ -183,15 +174,28 @@ const OCRPage: React.FC = () => {
         <div className="panel-hd">
           <div className="panel-hd-title">
             <div className="panel-hd-icon" style={{ background: 'rgba(77,132,255,0.12)', color: '#4D84FF' }}>
-              <FileTextOutlined />
+              <ReadOutlined />
             </div>
             {t('ocr.result')}
           </div>
-          {result && (
-            <Button size="small" icon={<CopyOutlined />} onClick={copyResult}>
-              {t('common.copy')}
-            </Button>
-          )}
+          <Space>
+            {result && isGlmResult && (
+              <Segmented
+                size="small"
+                value={glmViewMode}
+                onChange={(v) => setGlmViewMode(v as 'rendered' | 'source')}
+                options={[
+                  { label: t('ocr.renderedView'), value: 'rendered' },
+                  { label: t('ocr.sourceView'), value: 'source' },
+                ]}
+              />
+            )}
+            {result && (
+              <Button size="small" icon={<CopyOutlined />} onClick={copyResult}>
+                {t('common.copy')}
+              </Button>
+            )}
+          </Space>
         </div>
         <div className="panel-bd">
           {loading ? (
@@ -200,12 +204,23 @@ const OCRPage: React.FC = () => {
               <div style={{ marginTop: 16, color: 'var(--txt-1)', fontSize: 13 }}>{t('common.processing')}</div>
             </div>
           ) : result ? (
-            <TextArea
-              value={result}
-              onChange={(e) => setResult(e.target.value)}
-              style={{ fontFamily: 'var(--mono)', minHeight: 400, resize: 'vertical' }}
-              autoSize={{ minRows: 16 }}
-            />
+            isGlmResult && glmViewMode === 'rendered' ? (
+              <div className="ocr-markdown-preview">
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm, remarkMath]}
+                  rehypePlugins={[rehypeKatex, rehypeRaw]}
+                >
+                  {result}
+                </ReactMarkdown>
+              </div>
+            ) : (
+              <TextArea
+                value={result}
+                onChange={(e) => setResult(e.target.value)}
+                style={{ fontFamily: 'var(--mono)', minHeight: 400, resize: 'vertical' }}
+                autoSize={{ minRows: 16 }}
+              />
+            )
           ) : (
             <div style={{ color: 'var(--txt-2)', fontSize: 13, padding: '40px 0', textAlign: 'center' }}>
               {t('ocr.noResult')}

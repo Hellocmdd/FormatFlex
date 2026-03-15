@@ -34,16 +34,16 @@ The app has three independent layers that communicate in a strict chain:
 React UI  →  invokeCmd()  →  Tauri (Rust)  →  Python subprocess  →  Python handler
 ```
 
-**Python subprocess bridge** (`src-tauri/src/lib.rs → run_python_handler`):  
+**Python subprocess bridge** (`src-tauri/src/lib.rs → run_python_handler`):
 Every Tauri command is a thin wrapper that calls `run_python_handler(script, operation, json_params)`. The function walks up the directory tree (up to 5 levels) to find `python/venv/bin/python3`, falling back to system `python3`. All parameters travel as a single JSON string; all responses are JSON printed to stdout.
 
-**Python handlers** (`python/`):  
+**Python handlers** (`python/`):
 Each script (`pdf_handler.py`, `convert_handler.py`, `ocr_handler.py`) exposes an `OPERATIONS` dict mapping operation names to functions. Called as: `python3 <script>.py <operation> '<json_params>'`. Every function returns `{"success": bool, ...}`. Imports are lazy (inside each function) so the script starts fast even without all libraries installed.
 
-**Frontend → Tauri bridge** (`src/hooks/useInvoke.ts`):  
+**Frontend → Tauri bridge** (`src/hooks/useInvoke.ts`):
 All frontend→backend calls go through `invokeCmd<T>(cmd, params)`. It wraps `invoke()` by serializing params as a JSON string (matching the Rust `params: String` signature) and parsing the JSON string response back into `T`.
 
-**i18n** (`src/i18n.ts`, `src/locales/`):  
+**i18n** (`src/i18n.ts`, `src/locales/`):
 Language is persisted in `localStorage`. The Ant Design `locale` prop in `App.tsx` is synchronized with `i18n.language`. Both `zh.json` and `en.json` must be kept in sync — same key structure.
 
 **Dark mode**: `darkMode` state lives in `App.tsx` and flows down to `AppLayout` (for Ant Design `algorithm`) and `SettingsPage` (for the toggle). Ant Design theme switching is done via `theme.darkAlgorithm` / `theme.defaultAlgorithm` on `<ConfigProvider>`.
@@ -62,17 +62,21 @@ Language is persisted in `localStorage`. The Ant Design `locale` prop in `App.ts
        run_python_handler("pdf_handler.py", "my_operation", &params)
    }
    ```
+
    > ⚠️ Do **not** use `pub fn` for command functions — Tauri 2 macro expansion causes `E0255` duplicate-macro errors when combined with `pub`.
+   >
 3. Register the function in `tauri::generate_handler![...]` inside `run()`.
 4. Call it from the frontend via `invokeCmd<PyResult>('my_new_cmd', { key: value })`.
 
 ### Python handler return shape
+
 ```python
 # success
 {"success": True, "output": "/path/to/result.pdf", ...}
 # failure  
 {"success": False, "error": "description"}
 ```
+
 The `PyResult` TypeScript interface in `useInvoke.ts` covers the common fields. Extend it locally in a component for operation-specific extra fields (e.g., `ratio`, `pages`, `words_count`).
 
 ### Streaming / progress commands (exception to standard pattern)
@@ -90,12 +94,15 @@ fn pdf_bruteforce(app: tauri::AppHandle, params: String) -> Result<String, Strin
 On the frontend, `BruteforcePanel.tsx` uses `listen()` from `@tauri-apps/api/event` (not `invokeCmd()`) and calls `invoke()` directly (because the Rust signature includes `AppHandle` alongside `params`). A companion `pdf_bruteforce_cancel` command kills the child process via a global `Mutex<Option<Child>>`. Follow this same pattern for any future long-running operation that needs progress reporting.
 
 ### Frontend component pattern
+
 Most feature pages (`ConvertPage`, `OCRPage`) keep all tab panels as **inline function components** (`const FooTab = () => { ... }`) inside the parent file, composed into an Ant Design `<Tabs items={...} />`. Complex panels that need event listeners or substantial state (e.g., `BruteforcePanel`) are extracted into their own files under the feature directory.
 
 ### i18n keys
+
 All user-visible strings use `t('section.subsection.key')` — never hardcoded Chinese or English. When adding new UI text, add the key to **both** `src/locales/zh.json` and `src/locales/en.json`.
 
 ### File path handling
+
 `Upload` components use `(file as any).path` to get the native file system path from Tauri's file picker — this is the Tauri-specific field, not the web `File` API `name`.
 
 ## Python Environment
@@ -109,7 +116,7 @@ pip install -r requirements.txt
 
 # System dependencies also required
 sudo apt install tesseract-ocr tesseract-ocr-chi-sim tesseract-ocr-eng
-sudo apt install libreoffice   # for Word/Excel/PPT → PDF conversion
+sudo apt install pandoc wkhtmltopdf texlive-xetex   # for conversion module PDF export (xelatex preferred)
 ```
 
 The venv must live at `python/venv/` — this path is hardcoded in `run_python_handler`.

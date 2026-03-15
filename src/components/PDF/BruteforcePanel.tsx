@@ -11,6 +11,8 @@ import {
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/core';
 import { useTranslation as _useTranslation } from 'react-i18next'; // kept for future i18n
+import { ensureSingleLocalPath, pickSinglePath } from '../../utils/filePicker';
+import { invokeCmd, PyResult } from '../../hooks/useInvoke';
 
 const { Text } = Typography;
 const { Dragger } = Upload;
@@ -47,8 +49,40 @@ const BruteforcePanel: React.FC = () => {
   const [running, setRunning] = useState(false);
   const [progress, setProgress] = useState<ProgressEvent | null>(null);
   const [result, setResult] = useState<ProgressEvent | null>(null);
+  const [decrypting, setDecrypting] = useState(false);
+  const [decryptOutput, setDecryptOutput] = useState('');
+  const [decryptError, setDecryptError] = useState('');
 
   const unlistenRef = useRef<UnlistenFn | null>(null);
+  const pdfPathRef = useRef('');
+
+  useEffect(() => {
+    pdfPathRef.current = pdfPath;
+  }, [pdfPath]);
+
+  const autoDecryptWithFoundPassword = async (password: string) => {
+    const inputFile = pdfPathRef.current;
+    if (!inputFile || !password) return;
+    setDecrypting(true);
+    setDecryptOutput('');
+    setDecryptError('');
+    try {
+      const decryptRes = await invokeCmd<PyResult>('pdf_decrypt', {
+        input_file: inputFile,
+        password,
+      });
+      if (decryptRes.success) {
+        setDecryptOutput(decryptRes.output || '');
+        message.success('已自动完成 PDF 解密');
+      } else {
+        const err = decryptRes.error || '自动解密失败';
+        setDecryptError(err);
+        message.error(err);
+      }
+    } finally {
+      setDecrypting(false);
+    }
+  };
 
   // Subscribe to Tauri bruteforce events
   useEffect(() => {
@@ -61,6 +95,9 @@ const BruteforcePanel: React.FC = () => {
         setProgress(null);
         setResult(data);
         setRunning(false);
+        if (data.type === 'found' && data.password) {
+          void autoDecryptWithFoundPassword(data.password);
+        }
       }
     }).then((fn) => {
       unlisten = fn;
@@ -78,6 +115,9 @@ const BruteforcePanel: React.FC = () => {
     setRunning(true);
     setProgress(null);
     setResult(null);
+    setDecrypting(false);
+    setDecryptOutput('');
+    setDecryptError('');
 
     const params = JSON.stringify({
       pdf_path: pdfPath,
@@ -138,14 +178,40 @@ const BruteforcePanel: React.FC = () => {
       />
 
       {/* File Selection */}
-      <Dragger
-        accept=".pdf"
-        maxCount={1}
-        beforeUpload={(f) => { setPdfPath((f as any).path || f.name); return false; }}
-      >
-        <p className="ant-upload-hint">点击或拖拽加密 PDF 文件</p>
-        {pdfPath && <Text type="secondary">{pdfPath.split('/').pop()}</Text>}
-      </Dragger>
+      <div className="pdf-file-block">
+        <div onClick={async () => {
+          const picked = await pickSinglePath({
+            title: '选择加密 PDF 文件',
+            filters: [{ name: 'pdf', extensions: ['pdf'] }],
+          });
+          if (!picked) return;
+          setPdfPath(picked);
+          message.success(`已选择: ${picked}`);
+        }}>
+          <Dragger
+            accept=".pdf"
+            maxCount={1}
+            openFileDialogOnClick={false}
+            beforeUpload={async (f) => {
+              const p = await ensureSingleLocalPath(f, {
+                title: '选择加密 PDF 文件',
+                filters: [{ name: 'pdf', extensions: ['pdf'] }],
+              });
+              if (!p) {
+                message.error('无法获取文件真实路径，请改用“浏览”按钮');
+                return Upload.LIST_IGNORE;
+              }
+              setPdfPath(p);
+              return false;
+            }}
+          >
+            <p className="ant-upload-hint">点击或拖拽加密 PDF 文件</p>
+          </Dragger>
+        </div>
+        <div className="pdf-file-selected-slot">
+          {pdfPath && <Tag className="pdf-selected-file">已选择: {pdfPath.split('/').pop()}</Tag>}
+        </div>
+      </div>
 
       {/* Mode Tabs */}
       <Tabs
@@ -215,14 +281,40 @@ const BruteforcePanel: React.FC = () => {
                   type="warning" showIcon
                   message="字典攻击：逐行读取字典文件中的密码尝试，适用于已知密码模式的场景"
                 />
-                <Dragger
-                  accept=".txt,.lst,.dic"
-                  maxCount={1}
-                  beforeUpload={(f) => { setDictPath((f as any).path || f.name); return false; }}
-                >
-                  <p className="ant-upload-hint">点击或拖拽字典文件（.txt，每行一个密码）</p>
-                  {dictPath && <Text type="secondary">{dictPath.split('/').pop()}</Text>}
-                </Dragger>
+                <div className="pdf-file-block">
+                  <div onClick={async () => {
+                    const picked = await pickSinglePath({
+                      title: '选择字典文件',
+                      filters: [{ name: 'dict', extensions: ['txt', 'lst', 'dic'] }],
+                    });
+                    if (!picked) return;
+                    setDictPath(picked);
+                    message.success(`已选择: ${picked}`);
+                  }}>
+                    <Dragger
+                      accept=".txt,.lst,.dic"
+                      maxCount={1}
+                      openFileDialogOnClick={false}
+                      beforeUpload={async (f) => {
+                        const p = await ensureSingleLocalPath(f, {
+                          title: '选择字典文件',
+                          filters: [{ name: 'dict', extensions: ['txt', 'lst', 'dic'] }],
+                        });
+                        if (!p) {
+                          message.error('无法获取文件真实路径，请改用“浏览”按钮');
+                          return Upload.LIST_IGNORE;
+                        }
+                        setDictPath(p);
+                        return false;
+                      }}
+                    >
+                      <p className="ant-upload-hint">点击或拖拽字典文件（.txt，每行一个密码）</p>
+                    </Dragger>
+                  </div>
+                  <div className="pdf-file-selected-slot">
+                    {dictPath && <Tag className="pdf-selected-file">已选择: {dictPath.split('/').pop()}</Tag>}
+                  </div>
+                </div>
               </Space>
             ),
           },
@@ -256,6 +348,7 @@ const BruteforcePanel: React.FC = () => {
         </Button>
         {running && (
           <Button
+            type="primary"
             danger
             icon={<StopOutlined />}
             onClick={handleCancel}
@@ -268,7 +361,7 @@ const BruteforcePanel: React.FC = () => {
 
       {/* Progress */}
       {running && progress && (
-        <Card size="small" style={{ background: '#f6ffed', borderColor: '#b7eb8f' }}>
+        <Card size="small" className="bf-card bf-progress-card">
           <Row gutter={24}>
             <Col span={6}>
               <Statistic title="已尝试" value={progress.tried?.toLocaleString()} suffix={`/ ${progress.total?.toLocaleString()}`} />
@@ -293,7 +386,7 @@ const BruteforcePanel: React.FC = () => {
       )}
 
       {running && !progress && (
-        <Card size="small">
+        <Card size="small" className="bf-card bf-init-card">
           <Text>正在初始化并行进程...</Text>
         </Card>
       )}
@@ -302,6 +395,7 @@ const BruteforcePanel: React.FC = () => {
       {result && (
         <Card
           size="small"
+          className={`bf-card ${result.type === 'found' ? 'bf-found-card' : result.type === 'error' ? 'bf-error-card' : 'bf-done-card'}`}
           style={{
             background: result.type === 'found' ? '#f6ffed' : result.type === 'error' ? '#fff2f0' : '#fafafa',
             borderColor: result.type === 'found' ? '#b7eb8f' : result.type === 'error' ? '#ffccc7' : '#d9d9d9',
@@ -331,6 +425,9 @@ const BruteforcePanel: React.FC = () => {
                   复制
                 </Button>
               </Space>
+              {decrypting && <Text type="secondary">正在自动解密 PDF...</Text>}
+              {decryptOutput && <Text type="success">自动解密输出: {decryptOutput}</Text>}
+              {decryptError && <Text type="danger">自动解密失败: {decryptError}</Text>}
               <Text type="secondary">
                 共尝试 {result.tried?.toLocaleString()} 次，用时 {fmtSeconds(result.elapsed)}
               </Text>

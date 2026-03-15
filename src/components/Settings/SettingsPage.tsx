@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Form, Input, Select, Button, Switch, message } from 'antd';
+import { Alert, Form, Input, Select, Button, Switch, message } from 'antd';
 import {
   SettingOutlined, SaveOutlined, TranslationOutlined,
   BgColorsOutlined, KeyOutlined,
@@ -13,24 +13,24 @@ interface SettingsPageProps {
 
 const SettingsPage: React.FC<SettingsPageProps> = ({ darkMode, onToggleDark }) => {
   const { t, i18n } = useTranslation();
-  const [baiduAppId, setBaiduAppId] = useState('');
-  const [baiduApiKey, setBaiduApiKey] = useState('');
-  const [baiduSecretKey, setBaiduSecretKey] = useState('');
   const [glmApiKey, setGlmApiKey] = useState('');
+  const [jooxUuid, setJooxUuid] = useState('');
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    setBaiduAppId(localStorage.getItem('baidu_app_id') || '');
-    setBaiduApiKey(localStorage.getItem('baidu_api_key') || '');
-    setBaiduSecretKey(localStorage.getItem('baidu_secret_key') || '');
+    localStorage.removeItem('baidu_app_id');
+    localStorage.removeItem('baidu_api_key');
+    localStorage.removeItem('baidu_secret_key');
     setGlmApiKey(localStorage.getItem('glm_api_key') || '');
+    setJooxUuid(localStorage.getItem('joox_uuid') || '');
   }, []);
 
   const saveOCRConfig = () => {
-    localStorage.setItem('baidu_app_id', baiduAppId);
-    localStorage.setItem('baidu_api_key', baiduApiKey);
-    localStorage.setItem('baidu_secret_key', baiduSecretKey);
+    localStorage.removeItem('baidu_app_id');
+    localStorage.removeItem('baidu_api_key');
+    localStorage.removeItem('baidu_secret_key');
     localStorage.setItem('glm_api_key', glmApiKey);
+    localStorage.setItem('joox_uuid', jooxUuid.trim());
     setSaving(true);
     message.success(t('settings.ocr.saved'));
     setTimeout(() => setSaving(false), 1200);
@@ -90,24 +90,29 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ darkMode, onToggleDark }) =
         <div className="settings-section-bd" style={{ paddingTop: 14 }}>
           <Form layout="vertical">
             <div style={{ marginBottom: 4, fontSize: 12, fontWeight: 600, color: 'var(--txt-1)', letterSpacing: 0.5 }}>
-              百度 OCR
-            </div>
-            <Form.Item label={t('settings.ocr.baiduAppId')}>
-              <Input value={baiduAppId} onChange={(e) => setBaiduAppId(e.target.value)} placeholder="App ID" />
-            </Form.Item>
-            <Form.Item label={t('settings.ocr.baiduApiKey')}>
-              <Input.Password value={baiduApiKey} onChange={(e) => setBaiduApiKey(e.target.value)} placeholder="API Key" />
-            </Form.Item>
-            <Form.Item label={t('settings.ocr.baiduSecretKey')}>
-              <Input.Password value={baiduSecretKey} onChange={(e) => setBaiduSecretKey(e.target.value)} placeholder="Secret Key" />
-            </Form.Item>
-
-            <div style={{ marginBottom: 4, marginTop: 8, fontSize: 12, fontWeight: 600, color: 'var(--txt-1)', letterSpacing: 0.5 }}>
               GLM-OCR (ZhipuAI)
             </div>
+            <Alert
+              message={glmApiKey.trim() ? t('settings.ocr.glmConfigured') : t('settings.ocr.glmMissing')}
+              description={t('settings.ocr.glmNoticeDescription')}
+              type={glmApiKey.trim() ? 'info' : 'warning'}
+              showIcon
+              banner
+              style={{ marginBottom: 12 }}
+            />
             <Form.Item label="API Key">
               <Input.Password value={glmApiKey} onChange={(e) => setGlmApiKey(e.target.value)} placeholder="ZhipuAI API Key" />
             </Form.Item>
+
+            <div style={{ marginBottom: 4, fontSize: 12, fontWeight: 600, color: 'var(--txt-1)', letterSpacing: 0.5 }}>
+              JOOX
+            </div>
+            <Form.Item label={t('settings.ocr.jooxUuid')}>
+              <Input value={jooxUuid} onChange={(e) => setJooxUuid(e.target.value)} placeholder={t('settings.ocr.jooxUuidPlaceholder')} />
+            </Form.Item>
+            <div style={{ marginTop: -10, marginBottom: 12, fontSize: 12, color: 'var(--txt-2)' }}>
+              {t('settings.ocr.jooxUsage')}
+            </div>
 
             <Button type="primary" icon={<SaveOutlined />} onClick={saveOCRConfig} loading={saving}>
               {t('settings.ocr.save')}

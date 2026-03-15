@@ -34,3 +34,12 @@ __pycache__/
 
 # Rust / Tauri build artifacts
 src-tauri/target/
+
+# User data / generated artifacts
+img/
+output/
+pdf/
+video/
+【技术赛道课题】微服务设计挑战 /
+【技术赛道课题】微服务设计挑战 _tmp_word_md_images/
+【技术赛道课题】微服务设计挑战*/

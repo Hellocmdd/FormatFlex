@@ -3,12 +3,17 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
   FilePdfOutlined,
-  SyncOutlined,
+  SwapOutlined,
+  PictureOutlined,
+  SoundOutlined,
+  PlaySquareOutlined,
   ScanOutlined,
   SettingOutlined,
   TranslationOutlined,
   MoonOutlined,
   SunOutlined,
+  MenuFoldOutlined,
+  MenuUnfoldOutlined,
 } from '@ant-design/icons';
 
 interface AppLayoutProps {
@@ -21,38 +26,72 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children, darkMode, onToggleDark 
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
+  const [sidebarCollapsed, setSidebarCollapsed] = React.useState(() => {
+    try {
+      return localStorage.getItem('sidebar_collapsed') === '1';
+    } catch {
+      return false;
+    }
+  });
+
+  React.useEffect(() => {
+    try {
+      localStorage.setItem('sidebar_collapsed', sidebarCollapsed ? '1' : '0');
+    } catch {
+      // Ignore storage errors to keep navigation functional.
+    }
+  }, [sidebarCollapsed]);
 
   const navItems = [
-    { path: '/pdf',      icon: <FilePdfOutlined />, label: t('nav.pdf'),      color: '#F56776' },
-    { path: '/convert',  icon: <SyncOutlined />,    label: t('nav.convert'),  color: '#4D84FF' },
-    { path: '/ocr',      icon: <ScanOutlined />,    label: t('nav.ocr'),      color: '#34C48A' },
-    { path: '/settings', icon: <SettingOutlined />, label: t('nav.settings'), color: '#F0883E' },
+    { path: '/pdf', navigateTo: '/pdf', icon: <FilePdfOutlined />, label: t('nav.pdf'), color: '#F56776' },
+    { path: '/convert', navigateTo: '/convert', icon: <SwapOutlined />, label: t('nav.convert'), color: '#4D84FF' },
+    { path: '/image', navigateTo: '/image', icon: <PictureOutlined />, label: t('nav.imageConvert'), color: '#0EA5E9' },
+    { path: '/audio', navigateTo: '/audio', icon: <SoundOutlined />, label: t('nav.audioConvert'), color: '#EC4899' },
+    { path: '/video', navigateTo: '/video', icon: <PlaySquareOutlined />, label: t('nav.video'), color: '#10B981' },
+    { path: '/ocr', navigateTo: '/ocr', icon: <ScanOutlined />, label: t('nav.ocr'), color: '#34C48A' },
+    { path: '/settings', navigateTo: '/settings', icon: <SettingOutlined />, label: t('nav.settings'), color: '#F0883E' },
   ];
+
+  const isNavItemActive = (path: string) => {
+    if (path !== location.pathname) return false;
+    return true;
+  };
 
   const toggleLang = () =>
     i18n.changeLanguage(i18n.language.startsWith('zh') ? 'en' : 'zh');
 
   return (
     <div className={`app-shell ${darkMode ? 'dark' : 'light'}`}>
-      <aside className="app-sidebar">
+      <aside className={`app-sidebar ${sidebarCollapsed ? 'collapsed' : ''}`}>
         {/* Brand */}
         <div className="sidebar-brand">
-          <div className="brand-logo">
-            <FilePdfOutlined />
-          </div>
-          <div>
+          {!sidebarCollapsed && (
+            <div className="brand-logo">
+              <FilePdfOutlined />
+            </div>
+          )}
+          <div className="brand-text-wrap">
             <div className="brand-name">DocHub</div>
           </div>
+          <button
+            className="sidebar-collapse-btn"
+            onClick={() => setSidebarCollapsed(v => !v)}
+            title={sidebarCollapsed ? t('nav.expandSidebar') : t('nav.collapseSidebar')}
+            aria-label={sidebarCollapsed ? t('nav.expandSidebar') : t('nav.collapseSidebar')}
+          >
+            {sidebarCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+          </button>
         </div>
 
         {/* Navigation */}
         <nav className="sidebar-nav">
           {navItems.map(item => (
             <div
-              key={item.path}
-              className={`nav-item ${location.pathname === item.path ? 'active' : ''}`}
-              onClick={() => navigate(item.path)}
+              key={item.navigateTo}
+              className={`nav-item ${isNavItemActive(item.path) ? 'active' : ''}`}
+              onClick={() => navigate(item.navigateTo)}
               style={{ '--item-color': item.color } as React.CSSProperties}
+              title={item.label}
             >
               <span className="nav-icon">{item.icon}</span>
               <span className="nav-label">{item.label}</span>
@@ -63,16 +102,19 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children, darkMode, onToggleDark 
 
         {/* Footer controls */}
         <div className="sidebar-footer">
-          <button className="ctrl-btn" onClick={toggleLang} title="Toggle language">
+          <button className="ctrl-btn lang-btn" onClick={toggleLang} title={t('nav.toggleLanguage')}>
             <TranslationOutlined />
             <span>{i18n.language.startsWith('zh') ? 'EN' : '中'}</span>
           </button>
           <button
-            className={`ctrl-btn ${darkMode ? 'active' : ''}`}
+            className={`ctrl-btn theme-btn ${darkMode ? 'active' : ''}`}
             onClick={() => onToggleDark(!darkMode)}
-            title="Toggle dark mode"
+            title={t('nav.toggleDarkMode')}
           >
             {darkMode ? <MoonOutlined /> : <SunOutlined />}
+            <span className="theme-label">
+              {i18n.language.startsWith('zh') ? (darkMode ? '暗' : '亮') : (darkMode ? 'Dark' : 'Light')}
+            </span>
           </button>
         </div>
       </aside>

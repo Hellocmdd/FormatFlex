@@ -20,6 +20,23 @@ detect_pm() {
   info "检测到包管理器: $PM"
 }
 
+# ─── 预先提示并获取 sudo 凭证 ───────────────────────────────────────────────
+prepare_sudo_credentials() {
+  if [ "$(id -u)" -eq 0 ]; then
+    info "当前为 root 用户，跳过 sudo 密码验证"
+    return
+  fi
+
+  if ! command -v sudo &>/dev/null; then
+    error "未找到 sudo，请安装 sudo 或使用 root 用户运行脚本"
+  fi
+
+  echo ""
+  warn "下一步将安装系统依赖（编译工具链 / Tesseract / LibreOffice 等），需要管理员权限。"
+  info "马上可能会出现 sudo 密码提示，这是正常现象。"
+  sudo -v || error "sudo 身份验证失败，请确认密码后重试"
+}
+
 # ─── 安装系统依赖 ───────────────────────────────────────────────────────────
 install_system_deps() {
   info "安装系统依赖..."
@@ -33,6 +50,16 @@ install_system_deps() {
       PKGS="$PKGS python3 python3-pip python3-venv python3-dev"
       # Tesseract OCR + 中文语言包
       PKGS="$PKGS tesseract-ocr tesseract-ocr-chi-sim tesseract-ocr-chi-tra tesseract-ocr-eng"
+      # PDF OCR 依赖（pdf2image 需要 pdftoppm）+ Pandoc PDF 转换依赖
+      PKGS="$PKGS poppler-utils pandoc wkhtmltopdf texlive-xetex fonts-noto-cjk"
+      # Office 文档转换依赖
+      PKGS="$PKGS libreoffice"
+      # 图片重格式依赖（RAW/HEIF/SVG/EXR）
+      PKGS="$PKGS libraw-dev libheif-dev libopenexr-dev librsvg2-bin imagemagick"
+      # CairoSVG / cffi 相关系统库
+      PKGS="$PKGS libcairo2-dev libffi-dev libxml2-dev libxslt1-dev libjpeg-dev zlib1g-dev libde265-dev"
+      # 音频/媒体转换依赖
+      PKGS="$PKGS ffmpeg"
       # Node.js 通过 nvm 安装，不走 apt（版本太旧）
       $INSTALL $PKGS
       ;;
@@ -42,6 +69,11 @@ install_system_deps() {
       PKGS="$PKGS webkit2gtk4.1-devel libappindicator-gtk3-devel librsvg2-devel patchelf"
       PKGS="$PKGS python3 python3-pip python3-devel"
       PKGS="$PKGS tesseract tesseract-langpack-chi_sim tesseract-langpack-chi_tra"
+      PKGS="$PKGS poppler-utils pandoc wkhtmltopdf texlive-xetex google-noto-cjk-fonts"
+      PKGS="$PKGS libreoffice"
+      PKGS="$PKGS libraw-devel libheif-devel openexr-devel librsvg2-tools ImageMagick"
+      PKGS="$PKGS cairo-devel libffi-devel libxml2-devel libxslt-devel libjpeg-turbo-devel zlib-devel libde265-devel"
+      PKGS="$PKGS ffmpeg"
       $INSTALL $PKGS
       ;;
     pacman)
@@ -49,6 +81,11 @@ install_system_deps() {
       PKGS="$PKGS webkit2gtk-4.1 libappindicator-gtk3 librsvg patchelf"
       PKGS="$PKGS python python-pip"
       PKGS="$PKGS tesseract tesseract-data-chi_sim tesseract-data-chi_tra"
+      PKGS="$PKGS poppler pandoc wkhtmltopdf texlive-xetex noto-fonts-cjk"
+      PKGS="$PKGS libreoffice-fresh"
+      PKGS="$PKGS libraw libheif openexr librsvg imagemagick"
+      PKGS="$PKGS cairo libffi libxml2 libxslt libjpeg-turbo zlib libde265"
+      PKGS="$PKGS ffmpeg"
       $INSTALL $PKGS
       ;;
   esac
@@ -87,7 +124,7 @@ install_rust() {
     # 确保 cargo 在 PATH
     source "$HOME/.cargo/env" 2>/dev/null || true
     info "Rust 已存在: $(rustc --version)，检查更新..."
-    rustup update stable --quiet
+    rustup update stable
     return
   fi
   info "安装 Rust (via rustup)..."
@@ -98,19 +135,53 @@ install_rust() {
 
 # ─── 配置 Python 虚拟环境 ────────────────────────────────────────────────────
 setup_python() {
-  VENV_DIR="$(cd "$(dirname "$0")" && pwd)/python/venv"
+  PROJ_DIR="$(cd "$(dirname "$0")" && pwd)"
+  PY_DIR="$PROJ_DIR/python"
+  VENV_DIR="$PY_DIR/venv"
+  REQ_FILE="$PY_DIR/requirements.txt"
+  ACTIVATE_HELPER="$PY_DIR/activate.sh"
+
   info "配置 Python 虚拟环境: $VENV_DIR"
+
+  if ! command -v python3 &>/dev/null; then
+    error "未找到 python3，请先安装 Python 3"
+  fi
+
+  # venv 目录存在但不完整时，删除后重建，避免后续激活失败。
+  if [ -d "$VENV_DIR" ] && [ ! -f "$VENV_DIR/bin/activate" ]; then
+    warn "检测到损坏的虚拟环境，正在重建"
+    rm -rf "$VENV_DIR"
+  fi
+
   if [ ! -d "$VENV_DIR" ]; then
     python3 -m venv "$VENV_DIR"
   else
-    warn "虚拟环境已存在，跳过创建"
+    warn "虚拟环境已存在，复用现有环境"
   fi
+
   # shellcheck disable=SC1091
   source "$VENV_DIR/bin/activate"
-  pip install --upgrade pip --quiet
-  pip install -r "$(dirname "$0")/python/requirements.txt" --quiet
-  deactivate
-  success "Python 虚拟环境配置完成"
+  python -m pip install --upgrade pip --quiet
+
+  if [ -f "$REQ_FILE" ]; then
+    python -m pip install -r "$REQ_FILE" --quiet
+  else
+    warn "未找到 $REQ_FILE，跳过 Python 依赖安装"
+  fi
+
+  cat > "$ACTIVATE_HELPER" <<'EOF'
+#!/usr/bin/env bash
+# 快速激活本项目 Python 虚拟环境
+set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/venv/bin/activate"
+echo "Python venv activated: $VIRTUAL_ENV"
+EOF
+  chmod +x "$ACTIVATE_HELPER"
+
+  deactivate || true
+  success "Python 虚拟环境配置完成（激活脚本: python/activate.sh）"
 }
 
 # ─── 安装 npm 依赖 ───────────────────────────────────────────────────────────
@@ -128,7 +199,7 @@ install_npm_deps() {
 
   cd "$PROJ_DIR"
   npm install --silent || warn "npm install 失败，请检查网络或权限"
-  success "npm 依赖安装完成"
+  success "npm 依赖安装完成，请重启终端再次运行该脚本以确保环境变量生效"
 }
 
 # ─── 验证环境 ────────────────────────────────────────────────────────────────
@@ -153,6 +224,13 @@ verify_env() {
   check cargo
   check python3
   check tesseract
+  check libreoffice
+  check soffice
+  check ffmpeg
+  check pandoc
+  check pdftoppm
+  check wkhtmltopdf
+  check xelatex
 
   if [ "$ok" = true ]; then
     success "所有依赖验证通过 ✓"
@@ -170,6 +248,7 @@ main() {
   echo ""
 
   detect_pm
+  prepare_sudo_credentials
   install_system_deps
   install_node
   install_rust

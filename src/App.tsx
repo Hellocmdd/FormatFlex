@@ -8,6 +8,9 @@ import { useTranslation } from 'react-i18next';
 import AppLayout from './components/Layout/AppLayout';
 import PDFPage from './components/PDF/PDFPage';
 import ConvertPage from './components/Convert/ConvertPage';
+import ImageConvertPage from './components/Image/ImageConvertPage';
+import AudioPage from './components/Audio/AudioPage';
+import VideoPage from './components/Video/VideoPage';
 import OCRPage from './components/OCR/OCRPage';
 import SettingsPage from './components/Settings/SettingsPage';
 
@@ -65,6 +68,9 @@ const App: React.FC = () => {
             <Route path="/" element={<Navigate to="/pdf" replace />} />
             <Route path="/pdf" element={<PDFPage />} />
             <Route path="/convert" element={<ConvertPage />} />
+            <Route path="/image" element={<ImageConvertPage />} />
+            <Route path="/audio" element={<AudioPage />} />
+            <Route path="/video" element={<VideoPage />} />
             <Route path="/ocr" element={<OCRPage />} />
             <Route path="/settings" element={<SettingsPage darkMode={darkMode} onToggleDark={setDarkMode} />} />
           </Routes>
