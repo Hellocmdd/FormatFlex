@@ -95,48 +95,103 @@
 
 ## 快速开始
 
-### 一键安装（Linux）
+### Linux
+
+#### 安装依赖
+
+一键安装：
 
 ```bash
 bash setup.sh
 ```
 
-脚本会自动安装 Node.js（via nvm）、Rust（via rustup）、并安装核心系统依赖（Tesseract、LibreOffice、FFmpeg、Pandoc、wkhtmltopdf、XeLaTeX、Poppler）与 Python 虚拟环境。
+手动安装：
 
-### 一键安装（Windows）
+```bash
+# 1. 安装系统依赖
+sudo apt install tesseract-ocr tesseract-ocr-chi-sim tesseract-ocr-eng
+sudo apt install libreoffice   # Office 转换需要
+sudo apt install ffmpeg        # 音频转换需要
+sudo apt install pandoc wkhtmltopdf texlive-xetex poppler-utils
 
-在 PowerShell 中执行：
+# 2. 配置 Python 虚拟环境
+mkdir -p dep/python
+python3 -m venv dep/python/venv
+source dep/python/venv/bin/activate
+pip install -r requirements.txt
+
+# 3. 安装 npm 依赖
+npm install
+```
+
+#### 启动
+
+```bash
+source ~/.cargo/env   # Rust 不在默认 PATH，每次新 shell 需要执行
+npm run tauri dev
+# 或使用快捷脚本
+bash run.sh
+```
+
+### Windows
+
+#### 安装依赖
+
+一键安装（PowerShell）：
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\setup.ps1
 ```
 
-或直接双击：
+一键安装（双击）：
 
 ```text
 setup.bat
 ```
 
-Windows 脚本会优先通过 winget 安装：Python、Rustup，以及 Tesseract / LibreOffice / MiKTeX（可选依赖安装失败不会阻塞主流程）。
-Node.js 默认下载到项目本地 `dep/node`（不强依赖全局 Node.js）。
-FFmpeg / Pandoc / Poppler / wkhtmltopdf 默认下载到项目本地 `dep/tools/*`；若本地下载失败，默认自动回退到 winget 全局安装。
-Tesseract / LibreOffice 默认仍走全局安装；可通过参数切换为“优先复制/落地到 dep/tools（必要时回退全局安装）”。
-如需禁用该回退，可使用：
+Windows 脚本会优先通过 winget 安装 Python、Rustup、Tesseract、LibreOffice、MiKTeX（可选依赖失败不会阻塞主流程）。
+Node.js 默认下载到项目本地 `dep/node`，FFmpeg/Pandoc/Poppler/wkhtmltopdf 默认下载到 `dep/tools/*`；本地下载失败时默认自动回退到 winget 全局安装。
+
+可选参数：
 
 ```powershell
+# 禁用本地工具失败后的全局回退
 powershell -NoProfile -ExecutionPolicy Bypass -File .\setup.ps1 -NoGlobalToolFallback
-```
 
-如需启用 Tesseract / LibreOffice 的本地优先安装，可使用：
-
-```powershell
+# 优先将 Tesseract / LibreOffice 落地到 dep/tools（必要时回退全局安装）
 powershell -NoProfile -ExecutionPolicy Bypass -File .\setup.ps1 -PreferLocalOfficeOcr
+
+# 严格本地模式（禁用全局回退）
+powershell -NoProfile -ExecutionPolicy Bypass -File .\setup.ps1 -PreferLocalOfficeOcr -NoGlobalToolFallback
 ```
 
-严格本地模式（禁用全局回退）：
+#### 启动
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\setup.ps1 -PreferLocalOfficeOcr -NoGlobalToolFallback
+powershell -NoProfile -ExecutionPolicy Bypass -File .\run.ps1
+# 或双击
+run.bat
+```
+
+#### 卸载
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\uninstall.ps1
+# 或双击
+uninstall.bat
+```
+
+卸载脚本会先要求输入 `YES`，然后清理项目本地依赖目录：`dep`、`node_modules`、`src-tauri\target`、`dist`。
+
+通过 `uninstall.bat` 启动时，默认会列出当前已安装的全局依赖（Python、Rustup、Tesseract、LibreOffice、MiKTeX）供你选择删除。
+若需要管理员权限删除全局依赖，脚本会在本地清理完成后启动一个“仅全局卸载”的提权窗口，不会重复执行本地清理流程。
+
+```powershell
+# 仅本地清理（跳过全局依赖选择）
+powershell -NoProfile -ExecutionPolicy Bypass -File .\uninstall.ps1
+
+# 一次性删除所有受管全局依赖
+powershell -NoProfile -ExecutionPolicy Bypass -File .\uninstall.ps1 -RemoveGlobalDeps
 ```
 
 ### dep 本地依赖目录
@@ -173,76 +228,6 @@ dep/
 - Windows 下 Tauri 运行通常仍依赖系统级 WebView2，Rust 也通常仍依赖系统级编译工具链
 - wkhtmltopdf 的 Windows 可下载资产在上游 release 中不稳定；严格本地模式下若安装失败，会提示手动安装或启用全局回退
 
-### 手动安装
-
-```bash
-# 1. 安装系统依赖
-sudo apt install tesseract-ocr tesseract-ocr-chi-sim tesseract-ocr-eng
-sudo apt install libreoffice   # Office 转换需要
-sudo apt install ffmpeg        # 音频转换需要
-sudo apt install pandoc wkhtmltopdf texlive-xetex poppler-utils
-
-# 2. 配置 Python 虚拟环境
-mkdir -p dep/python
-python3 -m venv dep/python/venv
-source dep/python/venv/bin/activate
-pip install -r requirements.txt
-
-# 3. 安装 npm 依赖
-npm install
-```
-
-### 启动开发模式
-
-```bash
-source ~/.cargo/env   # Rust 不在默认 PATH，每次新 shell 需要执行
-npm run tauri dev
-# 或使用快捷脚本
-bash run.sh
-```
-
-Windows：
-
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\run.ps1
-# 或双击
-run.bat
-```
-
-### 一键卸载（Windows）
-
-在 PowerShell 中执行：
-
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\uninstall.ps1
-```
-
-或直接双击：
-
-```text
-uninstall.bat
-```
-
-卸载脚本会先要求输入 `YES` 确认，然后：
-- 清理项目本地依赖目录：`dep`、`node_modules`、`src-tauri\target`、`dist`
-
-通过 `uninstall.bat` 启动时，默认会列出当前已安装的全局依赖（Python、Rustup、Tesseract、LibreOffice、MiKTeX）并让你选择要删除的项。
-若需要管理员权限删除全局依赖，脚本会在本地清理完成后启动一个“仅全局卸载”的提权窗口，不会重复执行前面的本地清理流程。
-
-如果你只想清理项目本地目录、完全跳过全局依赖选择，可使用：
-
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\uninstall.ps1
-```
-
-如需一次性删除所有已安装的受管全局依赖，可使用：
-
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\uninstall.ps1 -RemoveGlobalDeps
-```
-
-若使用了本地依赖模式，Node.js / FFmpeg / Pandoc / Poppler / wkhtmltopdf / 本地复制的 Tesseract 与 LibreOffice 会随 `dep` 一起删除。
-
 前端热更新地址：`http://localhost:1420`（无 Tauri 窗口时可单独运行 `npm run dev`）
 
 ## 常用命令
@@ -258,7 +243,8 @@ cargo build --manifest-path src-tauri/Cargo.toml
 npm run tauri build
 
 # 直接测试 Python 处理器（无需启动 Tauri）
-cd python && source venv/bin/activate
+source dep/python/venv/bin/activate
+cd python
 python3 pdf_handler.py info '{"input_file": "/path/to/file.pdf"}'
 python3 ocr_handler.py local '{"image_path": "/path/to/img.png", "lang": "chi_sim+eng"}'
 python3 convert_handler.py pdf_to_markdown '{"input_file": "in.pdf", "output_file": "out.md"}'
