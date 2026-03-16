@@ -11,6 +11,19 @@ success() { echo -e "${GREEN}[OK]${NC}    $*"; }
 warn()    { echo -e "${YELLOW}[WARN]${NC}  $*"; }
 error()   { echo -e "${RED}[ERROR]${NC} $*" >&2; exit 1; }
 
+source_nvm_safely() {
+  export NVM_DIR="$HOME/.nvm"
+  if [ -s "$NVM_DIR/nvm.sh" ]; then
+    # nvm.sh 在 set -u 下会访问未定义变量，这里临时关闭 nounset。
+    set +u
+    # shellcheck disable=SC1091
+    source "$NVM_DIR/nvm.sh"
+    set -u
+    return 0
+  fi
+  return 1
+}
+
 # ─── 检测包管理器 ───────────────────────────────────────────────────────────
 detect_pm() {
   if   command -v apt-get &>/dev/null; then PM="apt"; INSTALL="sudo apt-get install -y"
@@ -104,13 +117,13 @@ install_node() {
   if [ ! -d "$NVM_DIR" ]; then
     curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash || true
   fi
-  
-  if [ -s "$NVM_DIR/nvm.sh" ]; then
-    # shellcheck disable=SC1091
-    source "$NVM_DIR/nvm.sh"
+
+  if source_nvm_safely; then
+    set +u
     nvm install --lts
     nvm use --lts
     nvm alias default node
+    set -u
     success "Node.js $(node --version) 安装完成"
   else
     warn "NVM 安装似乎失败，尝试直接安装 npm..."
@@ -191,8 +204,11 @@ install_npm_deps() {
   PROJ_DIR="$(cd "$(dirname "$0")" && pwd)"
   info "安装 npm 依赖..."
   # 确保 nvm node 可用
-  export NVM_DIR="$HOME/.nvm"
-  [ -s "$NVM_DIR/nvm.sh" ] && source "$NVM_DIR/nvm.sh"
+  if source_nvm_safely; then
+    set +u
+    nvm use --silent default >/dev/null 2>&1 || nvm use --silent --lts >/dev/null 2>&1 || true
+    set -u
+  fi
   
   if ! command -v npm &>/dev/null; then
     warn "npm 未找到，跳过依赖安装"
@@ -208,8 +224,12 @@ install_npm_deps() {
 verify_env() {
   info "验证环境..."
   source "$HOME/.cargo/env" 2>/dev/null || true
-  export NVM_DIR="$HOME/.nvm"
-  [ -s "$NVM_DIR/nvm.sh" ] && source "$NVM_DIR/nvm.sh"
+  source_nvm_safely || true
+  if command -v nvm &>/dev/null; then
+    set +u
+    nvm use --silent default >/dev/null 2>&1 || nvm use --silent --lts >/dev/null 2>&1 || true
+    set -u
+  fi
 
   local ok=true
   check() {

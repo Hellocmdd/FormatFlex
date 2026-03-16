@@ -19,6 +19,16 @@ if [ -f "$HOME/.cargo/env" ]; then
     source "$HOME/.cargo/env"
 fi
 
+# Load nvm in non-interactive shells so npm/node are available when launched via ./run.sh.
+export NVM_DIR="$HOME/.nvm"
+if [ -s "$NVM_DIR/nvm.sh" ]; then
+    set +u
+    # shellcheck disable=SC1091
+    source "$NVM_DIR/nvm.sh"
+    nvm use --silent default >/dev/null 2>&1 || nvm use --silent --lts >/dev/null 2>&1 || true
+    set -u
+fi
+
 # WSLg often logs libEGL/MESA warnings when hardware acceleration is unavailable.
 # Force software rendering in WSL to reduce noisy warnings and improve startup stability.
 if grep -qi microsoft /proc/version 2>/dev/null; then
@@ -26,6 +36,14 @@ if grep -qi microsoft /proc/version 2>/dev/null; then
     export GALLIUM_DRIVER="${GALLIUM_DRIVER:-llvmpipe}"
     export MESA_LOADER_DRIVER_OVERRIDE="${MESA_LOADER_DRIVER_OVERRIDE:-llvmpipe}"
     echo "WSL detected: using Mesa software rendering (llvmpipe)."
+fi
+
+if ! command -v npm >/dev/null 2>&1; then
+    echo "Error: npm not found in PATH."
+    echo "Hint: run 'bash setup.sh' first, then reopen terminal or execute:"
+    echo "  export NVM_DIR=\"\$HOME/.nvm\""
+    echo "  source \"\$NVM_DIR/nvm.sh\" && nvm use --lts"
+    exit 1
 fi
 
 echo "Starting DocHub in development mode..."
