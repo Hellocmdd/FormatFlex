@@ -14,6 +14,7 @@ from pathlib import Path
 
 from path_utils import (
     create_unique_child_dir,
+    resolve_ffmpeg_executables,
     resolve_input_path,
     resolve_output_dir,
     resolve_output_file,
@@ -110,9 +111,7 @@ _X3M_KEY = bytes([
 
 
 def _ensure_ffmpeg_tools() -> tuple[str | None, str | None]:
-    ffmpeg_bin = shutil.which("ffmpeg")
-    ffprobe_bin = shutil.which("ffprobe")
-    return ffmpeg_bin, ffprobe_bin
+    return resolve_ffmpeg_executables()
 
 
 def _validate_audio_stream_exists(input_file: str, ffprobe_bin: str | None) -> tuple[bool, str]:

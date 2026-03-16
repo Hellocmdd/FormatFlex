@@ -115,6 +115,7 @@
         "image": "Image Watermark"
       },
       "fontSize": "Font Size",
+      "textWidth": "Text Width",
       "opacity": "Opacity",
       "color": "Color",
       "colors": {

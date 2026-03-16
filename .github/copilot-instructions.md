@@ -35,7 +35,7 @@ React UI  →  invokeCmd()  →  Tauri (Rust)  →  Python subprocess  →  Pyth
 ```
 
 **Python subprocess bridge** (`src-tauri/src/lib.rs → run_python_handler`):
-Every Tauri command is a thin wrapper that calls `run_python_handler(script, operation, json_params)`. The function walks up the directory tree (up to 5 levels) to find `python/venv/bin/python3`, falling back to system `python3`. All parameters travel as a single JSON string; all responses are JSON printed to stdout.
+Every Tauri command is a thin wrapper that calls `run_python_handler(script, operation, json_params)`. The function walks up the directory tree (up to 5 levels) to find a project-local Python first, preferring `dep/python/venv/` and then legacy `python/venv/`, falling back to system Python only if no local venv exists. All parameters travel as a single JSON string; all responses are JSON printed to stdout.
 
 **Python handlers** (`python/`):
 Each script (`pdf_handler.py`, `convert_handler.py`, `ocr_handler.py`) exposes an `OPERATIONS` dict mapping operation names to functions. Called as: `python3 <script>.py <operation> '<json_params>'`. Every function returns `{"success": bool, ...}`. Imports are lazy (inside each function) so the script starts fast even without all libraries installed.
@@ -119,4 +119,4 @@ sudo apt install tesseract-ocr tesseract-ocr-chi-sim tesseract-ocr-eng
 sudo apt install pandoc wkhtmltopdf texlive-xetex   # for conversion module PDF export (xelatex preferred)
 ```
 
-The venv must live at `python/venv/` — this path is hardcoded in `run_python_handler`.
+The preferred venv location is `dep/python/venv/`. Legacy `python/venv/` is still supported as a fallback in `run_python_handler`.

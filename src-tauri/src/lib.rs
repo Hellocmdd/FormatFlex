@@ -3,6 +3,36 @@ use std::process::{Command, Stdio};
 use std::sync::{Arc, Mutex};
 use tauri::Emitter;
 
+fn default_python_command() -> String {
+    #[cfg(target_os = "windows")]
+    {
+        if Command::new("python")
+            .arg("--version")
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .is_ok()
+        {
+            return "python".to_string();
+        }
+        return "py".to_string();
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        if Command::new("python3")
+            .arg("--version")
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .is_ok()
+        {
+            return "python3".to_string();
+        }
+        return "python".to_string();
+    }
+}
+
 // ── Global bruteforce process handle (for cancellation) ───────────────────────
 
 static BRUTEFORCE_CHILD: std::sync::LazyLock<Arc<Mutex<Option<std::process::Child>>>> =
@@ -32,10 +62,16 @@ fn resolve_python_and_script(script: &str) -> (String, String) {
             for _ in 0..5 {
                 // Prefer workspace-level .venv, then fallback to python/venv for backward compatibility.
                 let candidates = [
+                    p.join("dep/python/venv/Scripts/python.exe"),
+                    p.join("dep/python/venv/bin/python"),
+                    p.join("dep/python/venv/bin/python3"),
+                    p.join(".venv/Scripts/python.exe"),
                     p.join(".venv/bin/python"),
                     p.join(".venv/bin/python3"),
+                    p.join("python/venv/Scripts/python.exe"),
                     p.join("python/venv/bin/python"),
                     p.join("python/venv/bin/python3"),
+                    p.join("venv/Scripts/python.exe"),
                     p.join("venv/bin/python"),
                     p.join("venv/bin/python3"),
                 ];
@@ -49,7 +85,7 @@ fn resolve_python_and_script(script: &str) -> (String, String) {
             }
             None
         })
-        .unwrap_or_else(|| "python3".to_string());
+        .unwrap_or_else(default_python_command);
 
     let script_path = std::env::current_dir()
         .map(|d| {

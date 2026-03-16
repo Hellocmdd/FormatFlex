@@ -3,12 +3,17 @@ import argparse
 import json
 import os
 import re
-import shutil
 import subprocess
 import sys
 from pathlib import Path
 
-from path_utils import create_unique_child_dir, resolve_input_path, resolve_output_dir, resolve_output_file
+from path_utils import (
+    create_unique_child_dir,
+    resolve_ffmpeg_executables,
+    resolve_input_path,
+    resolve_output_dir,
+    resolve_output_file,
+)
 
 SUPPORTED_VIDEO_FORMATS = {
     "3gp", "3gpp", "avi", "bik", "flv", "gif", "m4v", "mkv", "mp4",
@@ -90,9 +95,7 @@ def _emit_stream_event(payload: dict) -> None:
 
 
 def _ensure_ffmpeg_tools() -> tuple[str | None, str | None]:
-    ffmpeg_bin = shutil.which("ffmpeg")
-    ffprobe_bin = shutil.which("ffprobe")
-    return ffmpeg_bin, ffprobe_bin
+    return resolve_ffmpeg_executables()
 
 
 def _parse_codec_list(ffmpeg_output: str) -> tuple[set[str], set[str]]:

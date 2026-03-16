@@ -12,6 +12,8 @@ from path_utils import (
     create_unique_child_dir,
     resolve_input_path,
     resolve_output_dir,
+    resolve_libreoffice_executable,
+    resolve_poppler_bin_dir,
 )
 
 
@@ -213,7 +215,11 @@ def _save_image(img, output_path: str, output_format: str, quality: int):
 def _render_pdf_to_images(input_path: str, output_dir: str, output_format: str, dpi: int) -> list[str]:
     from pdf2image import convert_from_path
 
-    pages = convert_from_path(input_path, dpi=max(72, int(dpi)))
+    poppler_bin = resolve_poppler_bin_dir()
+    kwargs = {"dpi": max(72, int(dpi))}
+    if poppler_bin:
+        kwargs["poppler_path"] = poppler_bin
+    pages = convert_from_path(input_path, **kwargs)
     stem = Path(input_path).stem
     outputs = []
     for idx, page in enumerate(pages, start=1):
@@ -224,7 +230,7 @@ def _render_pdf_to_images(input_path: str, output_dir: str, output_format: str, 
 
 
 def _office_to_temp_pdf(input_path: str) -> str:
-    soffice = shutil.which("soffice") or shutil.which("libreoffice")
+    soffice = resolve_libreoffice_executable()
     if not soffice:
         raise RuntimeError("libreoffice/soffice not found")
 
@@ -382,7 +388,7 @@ def supported_image_formats() -> dict:
         "psd_tools": False,
         "pdf2image": False,
         "imageio": False,
-        "libreoffice": bool(shutil.which("soffice") or shutil.which("libreoffice")),
+        "libreoffice": bool(resolve_libreoffice_executable()),
     }
 
     for mod_name in ("rawpy", "pillow_heif", "cairosvg", "psd_tools", "pdf2image", "imageio"):

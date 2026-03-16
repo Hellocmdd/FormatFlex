@@ -17,7 +17,46 @@ from path_utils import (
     default_single_output,
     default_first_input_output,
     create_unique_child_dir,
+    resolve_poppler_bin_dir,
 )
+
+
+def _wrap_text_lines(text: str, max_width: float, measure_width) -> list[str]:
+    """Wrap text into multiple lines by visual width while preserving manual line breaks."""
+    raw = (text or "").replace("\r\n", "\n").replace("\r", "\n")
+    paragraphs = raw.split("\n") if raw else [""]
+    lines: list[str] = []
+
+    for paragraph in paragraphs:
+        if paragraph == "":
+            lines.append("")
+            continue
+
+        current = ""
+        for ch in paragraph:
+            candidate = current + ch
+            if current == "" or measure_width(candidate) <= max_width:
+                current = candidate
+                continue
+
+            lines.append(current.rstrip())
+            current = ch.lstrip() if ch == " " else ch
+
+        lines.append(current.rstrip())
+
+    return lines or [""]
+
+
+def _trim_lines_to_height(lines: list[str], max_lines: int) -> list[str]:
+    if max_lines <= 0:
+        return []
+    if len(lines) <= max_lines:
+        return lines
+
+    clipped = lines[:max_lines]
+    tail = (clipped[-1] or "")
+    clipped[-1] = (tail[:-1] + "…") if len(tail) > 1 else "…"
+    return clipped
 
 
 def merge_pdfs(input_files: list, output_file: str = "") -> dict:
@@ -162,12 +201,14 @@ def compress_pdf(input_file: str, output_file: str = "") -> dict:
 def add_watermark(input_file: str, output_file: str = "", text: str = "",
                   font_size: int = 40, opacity: float = 0.3,
                   color: str = "gray", image_path: str = "",
-                  image_scale: float = 0.4) -> dict:
+                  image_scale: float = 0.4,
+                  text_width_ratio: float = 0.75) -> dict:
     """Add text or image watermark to each PDF page."""
     from pypdf import PdfReader, PdfWriter
     from reportlab.pdfgen import canvas
     from reportlab.lib import colors
     from reportlab.lib.utils import ImageReader
+    from reportlab.pdfbase import pdfmetrics
     import io
     try:
         input_file = resolve_input_path(input_file, __file__)
@@ -220,8 +261,23 @@ def add_watermark(input_file: str, output_file: str = "", text: str = "",
                 )
 
             if text:
-                c.setFont("Helvetica", font_size)
-                c.drawCentredString(0, 0, text)
+                safe_font_size = max(8, int(font_size))
+                safe_text_width_ratio = max(0.5, min(float(text_width_ratio), 0.9))
+                c.setFont("Helvetica", safe_font_size)
+                max_text_width = min(w, h) * safe_text_width_ratio
+                line_height = safe_font_size * 1.25
+                max_line_count = max(1, int((min(w, h) * 0.55) / line_height))
+
+                wrapped_lines = _wrap_text_lines(
+                    text,
+                    max_text_width,
+                    lambda s: pdfmetrics.stringWidth(s, "Helvetica", safe_font_size),
+                )
+                wrapped_lines = _trim_lines_to_height(wrapped_lines, max_line_count)
+
+                start_y = ((len(wrapped_lines) - 1) * line_height) / 2
+                for idx, line in enumerate(wrapped_lines):
+                    c.drawCentredString(0, start_y - idx * line_height, line)
             c.restoreState()
             c.save()
             packet.seek(0)
@@ -298,7 +354,11 @@ def preview_page_numbers(input_file: str,
         preview = None
         try:
             from pdf2image import convert_from_path
-            pages = convert_from_path(input_file, first_page=1, last_page=1, dpi=120)
+            poppler_bin = resolve_poppler_bin_dir()
+            kwargs = {"first_page": 1, "last_page": 1, "dpi": 120}
+            if poppler_bin:
+                kwargs["poppler_path"] = poppler_bin
+            pages = convert_from_path(input_file, **kwargs)
             if pages:
                 preview = pages[0].convert("RGBA")
         except Exception:
@@ -344,7 +404,8 @@ def preview_watermark(input_file: str,
                       opacity: float = 0.3,
                       color: str = "gray",
                       image_path: str = "",
-                      image_scale: float = 0.4) -> dict:
+                      image_scale: float = 0.4,
+                      text_width_ratio: float = 0.75) -> dict:
     """Generate a one-page PNG preview for watermark settings."""
     try:
         input_file = resolve_input_path(input_file, __file__)
@@ -362,7 +423,11 @@ def preview_watermark(input_file: str,
         preview = None
         try:
             from pdf2image import convert_from_path
-            pages = convert_from_path(input_file, first_page=1, last_page=1, dpi=120)
+            poppler_bin = resolve_poppler_bin_dir()
+            kwargs = {"first_page": 1, "last_page": 1, "dpi": 120}
+            if poppler_bin:
+                kwargs["poppler_path"] = poppler_bin
+            pages = convert_from_path(input_file, **kwargs)
             if pages:
                 preview = pages[0].convert("RGBA")
         except Exception:
@@ -403,11 +468,34 @@ def preview_watermark(input_file: str,
                 font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", max(12, int(font_size * 2)))
             except Exception:
                 font = ImageFont.load_default()
-            bbox = draw.textbbox((0, 0), text, font=font)
-            tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
-            tx = (preview.width - tw) // 2
-            ty = (preview.height - th) // 2
-            draw.text((tx, ty), text, fill=fill, font=font)
+
+            safe_text_width_ratio = max(0.5, min(float(text_width_ratio), 0.9))
+            max_text_width = preview.width * safe_text_width_ratio
+            one_line_bbox = draw.textbbox((0, 0), "Ag", font=font)
+            one_line_h = max(1, one_line_bbox[3] - one_line_bbox[1])
+            line_height = max(one_line_h, int(one_line_h * 1.25))
+            max_line_count = max(1, int((preview.height * 0.56) / line_height))
+
+            def _measure_text_width(s: str) -> int:
+                b = draw.textbbox((0, 0), s, font=font)
+                return b[2] - b[0]
+
+            wrapped_lines = _wrap_text_lines(
+                text,
+                max_text_width,
+                _measure_text_width,
+            )
+            wrapped_lines = _trim_lines_to_height(wrapped_lines, max_line_count)
+
+            text_block_h = len(wrapped_lines) * line_height
+            ty = (preview.height - text_block_h) // 2
+            for line in wrapped_lines:
+                bbox = draw.textbbox((0, 0), line, font=font)
+                tw = bbox[2] - bbox[0]
+                tx = (preview.width - tw) // 2
+                draw.text((tx, ty), line, fill=fill, font=font)
+                ty += line_height
+
             overlay = overlay.rotate(25, center=(preview.width // 2, preview.height // 2), expand=False)
 
         result = Image.alpha_composite(preview, overlay)
@@ -647,7 +735,11 @@ def preview_pages(input_file: str,
 
         try:
             from pdf2image import convert_from_path
-            images = convert_from_path(input_file, dpi=safe_dpi, fmt="png")
+            poppler_bin = resolve_poppler_bin_dir()
+            kwargs = {"dpi": safe_dpi, "fmt": "png"}
+            if poppler_bin:
+                kwargs["poppler_path"] = poppler_bin
+            images = convert_from_path(input_file, **kwargs)
             for idx, img in enumerate(images, start=1):
                 if img.width > safe_max_width:
                     target_h = max(1, int(img.height * safe_max_width / img.width))

@@ -694,6 +694,7 @@ const PDFPage: React.FC = () => {
     const [text, setText] = useState('');
     const [imagePath, setImagePath] = useState('');
     const [fontSize, setFontSize] = useState(40);
+    const [textWidthRatio, setTextWidthRatio] = useState(0.75);
     const [opacity, setOpacity] = useState(0.3);
     const [imageScale, setImageScale] = useState(0.4);
     const [color, setColor] = useState('gray');
@@ -712,6 +713,7 @@ const PDFPage: React.FC = () => {
           text: mode === 'text' ? text : '',
           image_path: mode === 'image' ? imagePath : '',
           font_size: fontSize,
+          text_width_ratio: textWidthRatio,
           opacity,
           image_scale: imageScale,
           color,
@@ -723,7 +725,7 @@ const PDFPage: React.FC = () => {
       }, 220);
 
       return () => clearTimeout(timer);
-    }, [file, mode, text, imagePath, fontSize, opacity, imageScale, color]);
+    }, [file, mode, text, imagePath, fontSize, textWidthRatio, opacity, imageScale, color]);
 
     const handleWatermark = async () => {
       if (!file) return message.warning('请选择 PDF 文件');
@@ -736,6 +738,7 @@ const PDFPage: React.FC = () => {
           text: mode === 'text' ? text : '',
           image_path: mode === 'image' ? imagePath : '',
           font_size: fontSize,
+          text_width_ratio: textWidthRatio,
           opacity,
           image_scale: imageScale,
           color,
@@ -761,7 +764,12 @@ const PDFPage: React.FC = () => {
           style={{ width: 220 }}
         />
         {mode === 'text' ? (
-          <Input placeholder={t('pdf.watermark.text')} value={text} onChange={(e) => setText(e.target.value)} />
+          <Input.TextArea
+            placeholder={t('pdf.watermark.text')}
+            value={text}
+            autoSize={{ minRows: 2, maxRows: 6 }}
+            onChange={(e) => setText(e.target.value)}
+          />
         ) : (
           <div className="pdf-file-block">
             <div className="pdf-file-actions">
@@ -808,6 +816,14 @@ const PDFPage: React.FC = () => {
             </Col>
           )}
         </Row>
+        {mode === 'text' && (
+          <Row gutter={16}>
+            <Col span={8}>
+              <Text>{t('pdf.watermark.textWidth')}: {Math.round(textWidthRatio * 100)}%</Text>
+              <Slider min={0.5} max={0.9} step={0.05} value={textWidthRatio} onChange={setTextWidthRatio} />
+            </Col>
+          </Row>
+        )}
         <div className="pdf-preview-card">
           <Text type="secondary">{t('pdf.preview.watermark')}</Text>
           {previewSrc ? (

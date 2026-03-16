@@ -3,7 +3,7 @@
 set -euo pipefail
 
 PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
-PY_VENV_DIR="$PROJECT_DIR/python/venv"
+PY_VENV_DIR="$PROJECT_DIR/dep/python/venv"
 
 # Prefer project Python venv so Tauri->Python handlers resolve consistent dependencies.
 if [ -x "$PY_VENV_DIR/bin/python3" ]; then

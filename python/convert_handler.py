@@ -16,6 +16,12 @@ from path_utils import (
     default_single_output,
     default_first_input_output,
     create_unique_child_dir,
+    resolve_chromium_executable,
+    resolve_pandoc_executable,
+    resolve_libreoffice_executable,
+    resolve_poppler_bin_dir,
+    resolve_tex_executable,
+    resolve_wkhtmltopdf_executable,
 )
 
 
@@ -68,7 +74,7 @@ def run_libreoffice_to_pdf(input_file: str, output_file: str) -> dict:
     """Convert office document to PDF using LibreOffice headless export."""
     import subprocess
 
-    soffice = shutil.which("soffice") or shutil.which("libreoffice")
+    soffice = resolve_libreoffice_executable()
     if not soffice:
         return {
             "success": False,
@@ -108,7 +114,7 @@ def _convert_spreadsheet_to_xlsx_temp(input_file: str) -> tuple[str, str]:
     import subprocess
     import tempfile
 
-    soffice = shutil.which("soffice") or shutil.which("libreoffice")
+    soffice = resolve_libreoffice_executable()
     if not soffice:
         raise RuntimeError("libreoffice/soffice not found")
 
@@ -328,11 +334,17 @@ def _replace_glm_placeholders_with_pdf_crops(
 
     def _get_page_image(page_no: int):
         if page_no not in page_cache:
+            poppler_bin = resolve_poppler_bin_dir()
+            kwargs = {
+                "dpi": dpi,
+                "first_page": page_no,
+                "last_page": page_no,
+            }
+            if poppler_bin:
+                kwargs["poppler_path"] = poppler_bin
             rendered = convert_from_path(
                 input_file,
-                dpi=dpi,
-                first_page=page_no,
-                last_page=page_no,
+                **kwargs,
             )
             if not rendered:
                 return None
@@ -870,12 +882,7 @@ def run_html_renderer_to_pdf(input_file: str, output_file: str) -> dict:
     errors = []
 
     # 1) Browser-grade rendering: Chromium/Chrome headless print-to-pdf.
-    browser = (
-        shutil.which("chromium")
-        or shutil.which("chromium-browser")
-        or shutil.which("google-chrome")
-        or shutil.which("google-chrome-stable")
-    )
+    browser = resolve_chromium_executable()
     if browser:
         try:
             html_uri = Path(input_file).resolve().as_uri()
@@ -899,7 +906,7 @@ def run_html_renderer_to_pdf(input_file: str, output_file: str) -> dict:
         errors.append("[chromium] not found")
 
     # 2) wkhtmltopdf fallback.
-    wkhtml = shutil.which("wkhtmltopdf")
+    wkhtml = resolve_wkhtmltopdf_executable()
 
     if wkhtml:
         cmd = [
@@ -1161,7 +1168,14 @@ def run_pandoc_to_pdf(
     """Run Pandoc to generate a PDF, trying available engines in priority order."""
     import subprocess
 
-    pandoc_bin = shutil.which("pandoc")
+    def resolve_pdf_engine(engine: str) -> str | None:
+        if engine == "wkhtmltopdf":
+            return resolve_wkhtmltopdf_executable()
+        if engine in ("xelatex", "pdflatex"):
+            return resolve_tex_executable(engine)
+        return shutil.which(engine)
+
+    pandoc_bin = resolve_pandoc_executable()
     if not pandoc_bin:
         return {
             "success": False,
@@ -1170,7 +1184,8 @@ def run_pandoc_to_pdf(
 
     default_order = ["xelatex", "pdflatex", "weasyprint", "wkhtmltopdf"]
     engine_order = preferred_engines if preferred_engines else default_order
-    available_engines = [e for e in engine_order if shutil.which(e)]
+    available_engines = [(engine, resolve_pdf_engine(engine)) for engine in engine_order]
+    available_engines = [(engine, engine_bin) for engine, engine_bin in available_engines if engine_bin]
     if not available_engines:
         return {
             "success": False,
@@ -1184,8 +1199,8 @@ def run_pandoc_to_pdf(
         base_cmd += extra_args
 
     errors = []
-    for engine in available_engines:
-        cmd = base_cmd + ["--pdf-engine", engine]
+    for engine, engine_bin in available_engines:
+        cmd = base_cmd + ["--pdf-engine", engine_bin]
         # HTML-based engines usually need MathML output for math formula rendering.
         if engine in ("weasyprint", "wkhtmltopdf") and "--mathml" not in cmd:
             cmd += ["--mathml"]

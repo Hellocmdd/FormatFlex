@@ -137,9 +137,10 @@ install_rust() {
 setup_python() {
   PROJ_DIR="$(cd "$(dirname "$0")" && pwd)"
   PY_DIR="$PROJ_DIR/python"
-  VENV_DIR="$PY_DIR/venv"
+  DEP_DIR="$PROJ_DIR/dep"
+  VENV_DIR="$DEP_DIR/python/venv"
   REQ_FILE="$PY_DIR/requirements.txt"
-  ACTIVATE_HELPER="$PY_DIR/activate.sh"
+  ACTIVATE_HELPER="$DEP_DIR/activate.sh"
 
   info "配置 Python 虚拟环境: $VENV_DIR"
 
@@ -154,6 +155,7 @@ setup_python() {
   fi
 
   if [ ! -d "$VENV_DIR" ]; then
+    mkdir -p "$DEP_DIR/python"
     python3 -m venv "$VENV_DIR"
   else
     warn "虚拟环境已存在，复用现有环境"
@@ -181,7 +183,7 @@ EOF
   chmod +x "$ACTIVATE_HELPER"
 
   deactivate || true
-  success "Python 虚拟环境配置完成（激活脚本: python/activate.sh）"
+  success "Python 虚拟环境配置完成（激活脚本: dep/activate.sh）"
 }
 
 # ─── 安装 npm 依赖 ───────────────────────────────────────────────────────────

@@ -115,6 +115,7 @@
         "image": "图片水印"
       },
       "fontSize": "字体大小",
+      "textWidth": "文字宽度",
       "opacity": "透明度",
       "color": "颜色",
       "colors": {

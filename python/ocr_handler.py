@@ -3,7 +3,8 @@ import sys
 import json
 import os
 import argparse
-from path_utils import resolve_input_path
+import tempfile
+from path_utils import resolve_input_path, resolve_poppler_bin_dir, resolve_tesseract_executable
 
 
 def ocr_local(image_path: str, lang: str = "chi_sim+eng") -> dict:
@@ -11,6 +12,11 @@ def ocr_local(image_path: str, lang: str = "chi_sim+eng") -> dict:
     try:
         import pytesseract
         from PIL import Image
+
+        tesseract_bin = resolve_tesseract_executable()
+        if tesseract_bin:
+            pytesseract.pytesseract.tesseract_cmd = tesseract_bin
+
         image_path = resolve_input_path(image_path, __file__)
         if not os.path.exists(image_path):
             return {"success": False, "error": f"Input file not found: {image_path}. Please select the file using native file picker so absolute path is available.", "source": "local"}
@@ -84,7 +90,11 @@ def ocr_pdf(pdf_path: str, lang: str = "chi_sim+eng",
         pdf_path = resolve_input_path(pdf_path, __file__)
         if not os.path.exists(pdf_path):
             return {"success": False, "error": f"Input file not found: {pdf_path}. Please select the file using native file picker so absolute path is available."}
-        pages = convert_from_path(pdf_path, dpi=200)
+        poppler_bin = resolve_poppler_bin_dir()
+        kwargs = {"dpi": 200}
+        if poppler_bin:
+            kwargs["poppler_path"] = poppler_bin
+        pages = convert_from_path(pdf_path, **kwargs)
         results = []
         for i, page_img in enumerate(pages):
             import io
@@ -92,8 +102,8 @@ def ocr_pdf(pdf_path: str, lang: str = "chi_sim+eng",
             page_img.save(buf, format="PNG")
             buf.seek(0)
 
-            # Save temp image
-            tmp_path = f"/tmp/ocr_page_{i}.png"
+            with tempfile.NamedTemporaryFile(delete=False, suffix=f"_ocr_page_{i}.png") as tmp_file:
+                tmp_path = tmp_file.name
             page_img.save(tmp_path)
 
             if provider == "glm" and credentials:
