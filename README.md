@@ -149,8 +149,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\setup.ps1
 setup.bat
 ```
 
-Windows 脚本会优先通过 winget 安装 Python、Rustup、Tesseract、LibreOffice、MiKTeX（可选依赖失败不会阻塞主流程）。
-Node.js 默认下载到项目本地 `dep/node`，FFmpeg/Pandoc/Poppler/wkhtmltopdf 默认下载到 `dep/tools/*`；本地下载失败时默认自动回退到 winget 全局安装。
+Windows 脚本会优先通过 winget 安装 Python、Rustup、Node.js、Tesseract、LibreOffice、MiKTeX（可选依赖失败不会阻塞主流程）。
+FFmpeg/Pandoc/Poppler/wkhtmltopdf 默认下载到 `dep/tools/*`；本地下载失败时默认自动回退到 winget 全局安装。
 
 可选参数：
 
@@ -183,7 +183,7 @@ uninstall.bat
 
 卸载脚本会先要求输入 `YES`，然后清理项目本地依赖目录：`dep`、`node_modules`、`src-tauri\target`、`dist`。
 
-通过 `uninstall.bat` 启动时，默认会列出当前已安装的全局依赖（Python、Rustup、Tesseract、LibreOffice、MiKTeX）供你选择删除。
+通过 `uninstall.bat` 启动时，默认会列出当前已安装的全局依赖（Python、Rustup、Node.js、Tesseract、LibreOffice、MiKTeX）供你选择删除。
 若需要管理员权限删除全局依赖，脚本会在本地清理完成后启动一个“仅全局卸载”的提权窗口，不会重复执行本地清理流程。
 
 ```powershell
@@ -203,7 +203,6 @@ dep/
 	activate.ps1
 	activate.sh
 	python/venv/
-	node/
 	cargo/bin/
 	bin/
 	tools/
@@ -218,9 +217,9 @@ dep/
 
 当前已完成：
 - Python 包环境默认安装到 `dep/python/venv`
-- Node.js 默认安装到 `dep/node`
+- Node.js 默认通过 winget 全局安装
 - FFmpeg / Pandoc / Poppler / wkhtmltopdf 默认安装到 `dep/tools`
-- 运行时优先从 `dep/bin`、`dep/node`、`dep/cargo/bin`、`dep/tools/*` 解析可执行文件
+- 运行时优先从 `dep/bin`、`dep/cargo/bin`、`dep/tools/*` 与系统 PATH 解析可执行文件
 - Python 处理器优先从 `dep/tools` 查找 ffmpeg / ffprobe / pandoc / tesseract / libreoffice / wkhtmltopdf / pdftoppm / xelatex
 
 仍需注意：
@@ -231,6 +230,8 @@ dep/
 前端热更新地址：`http://localhost:1420`（无 Tauri 窗口时可单独运行 `npm run dev`）
 
 ## 常用命令
+
+### Linux / macOS
 
 ```bash
 # 仅构建前端（类型检查 + Vite 构建）
@@ -250,6 +251,28 @@ python3 ocr_handler.py local '{"image_path": "/path/to/img.png", "lang": "chi_si
 python3 convert_handler.py pdf_to_markdown '{"input_file": "in.pdf", "output_file": "out.md"}'
 python3 audio_handler.py convert_audio '{"input_file": "in.mp4", "target_format": "mp3"}'
 python3 audio_handler.py convert_audio_batch '{"input_files": ["a.wav", "b.flac"], "target_format": "m4a"}'
+```
+
+### Windows（PowerShell）
+
+```powershell
+# 仅构建前端（类型检查 + Vite 构建）
+npm run build
+
+# 仅编译 Rust（比完整构建快）
+cargo build --manifest-path src-tauri/Cargo.toml
+
+# 打包桌面应用
+npm run tauri build
+
+# 直接测试 Python 处理器（无需启动 Tauri）
+.\dep\activate.ps1
+Set-Location .\python
+python .\pdf_handler.py info '{"input_file":"C:/path/to/file.pdf"}'
+python .\ocr_handler.py local '{"image_path":"C:/path/to/img.png","lang":"chi_sim+eng"}'
+python .\convert_handler.py pdf_to_markdown '{"input_file":"in.pdf","output_file":"out.md"}'
+python .\audio_handler.py convert_audio '{"input_file":"in.mp4","target_format":"mp3"}'
+python .\audio_handler.py convert_audio_batch '{"input_files":["a.wav","b.flac"],"target_format":"m4a"}'
 ```
 
 ## 项目结构

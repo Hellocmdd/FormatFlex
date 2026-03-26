@@ -148,6 +148,7 @@ function Get-GlobalDependencyCatalog {
     return @(
         @{ Id = "Python.Python.3.12"; Name = "Python 3.12"; Required = $true },
         @{ Id = "Rustlang.Rustup"; Name = "Rustup"; Required = $true },
+        @{ Id = "OpenJS.NodeJS.LTS"; Name = "Node.js LTS"; Required = $true },
         @{ Id = "TheDocumentFoundation.LibreOffice"; Name = "LibreOffice"; Required = $false },
         @{ Id = "UB-Mannheim.TesseractOCR"; Name = "Tesseract OCR"; Required = $false },
         @{ Id = "tesseract-ocr.tesseract"; Name = "Tesseract OCR (official)"; Required = $false },
@@ -270,7 +271,7 @@ try {
     }
 
     if ($RemoveGlobalDeps) {
-        Write-Warn "Global dependency removal is ENABLED and may affect other projects using Python, Rust, LibreOffice, Tesseract, or MiKTeX."
+        Write-Warn "Global dependency removal is ENABLED and may affect other projects using Python, Rust, Node.js, LibreOffice, Tesseract, or MiKTeX."
     } elseif ($SelectGlobalDeps -and -not $GlobalOnly) {
         Write-Info "After local cleanup, installed global dependencies will be listed for optional selection and removal."
     } else {

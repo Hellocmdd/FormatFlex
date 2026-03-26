@@ -29,6 +29,44 @@ function Add-PathIfExists([string]$Candidate) {
     }
 }
 
+function Add-DirectoryToUserPathIfExists([string]$Candidate, [string]$Label) {
+    if (-not (Test-Path $Candidate)) {
+        return
+    }
+
+    $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
+    $parts = @()
+    if (-not [string]::IsNullOrWhiteSpace($userPath)) {
+        $parts = @($userPath -split ';' | ForEach-Object { $_.Trim() } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+    }
+
+    $exists = $false
+    foreach ($part in $parts) {
+        if ($part.TrimEnd('\\') -ieq $Candidate.TrimEnd('\\')) {
+            $exists = $true
+            break
+        }
+    }
+
+    if ($exists) {
+        Write-Ok "$Label is already in user PATH"
+        return
+    }
+
+    $newParts = New-Object System.Collections.Generic.List[string]
+    $newParts.Add($Candidate) | Out-Null
+    foreach ($part in $parts) {
+        if ($part.TrimEnd('\\') -ieq $Candidate.TrimEnd('\\')) {
+            continue
+        }
+        $newParts.Add($part) | Out-Null
+    }
+
+    [Environment]::SetEnvironmentVariable("Path", ($newParts -join ';'), "User")
+    Add-PathIfExists $Candidate
+    Write-Ok "Added $Label to user PATH"
+}
+
 function Test-CommandExists([string]$Name) {
     return $null -ne (Get-Command $Name -ErrorAction SilentlyContinue)
 }
@@ -526,68 +564,6 @@ function Find-CommandPath([string[]]$Names) {
     return $null
 }
 
-function Install-NodeLocal {
-    $depRoot = Join-Path $projectRoot "dep"
-    $nodeDir = Join-Path $depRoot "node"
-    $nodeExe = Join-Path $nodeDir "node.exe"
-    $npmCmd = Join-Path $nodeDir "npm.cmd"
-
-    if ((Test-Path $nodeExe) -and (Test-Path $npmCmd)) {
-        Add-PathIfExists $nodeDir
-        Write-Ok "Node.js already exists at dep\\node"
-        return
-    }
-
-    Write-Info "Installing local Node.js into dep\\node"
-    New-Item -ItemType Directory -Force -Path $depRoot | Out-Null
-
-    $cacheDir = Join-Path $depRoot "cache"
-    $extractDir = Join-Path $cacheDir "node_extract"
-    $zipPath = Join-Path $cacheDir "node-win-x64.zip"
-    New-Item -ItemType Directory -Force -Path $cacheDir | Out-Null
-    Remove-PathIfExists $extractDir "temporary node extract directory"
-
-    try {
-        $index = Invoke-RestMethod -Uri "https://nodejs.org/dist/index.json"
-        $lts = @($index | Where-Object { $_.lts -and ($_.files -contains "win-x64-zip") } | Select-Object -First 1)
-        if ($lts.Count -eq 0) {
-            throw "Cannot find a Windows x64 LTS Node.js zip package from official index."
-        }
-
-        $version = [string]$lts[0].version
-        $zipUrl = "https://nodejs.org/dist/$version/node-$version-win-x64.zip"
-
-        Write-Info "Downloading Node.js $version"
-        Invoke-WebRequest -Uri $zipUrl -OutFile $zipPath
-
-        New-Item -ItemType Directory -Force -Path $extractDir | Out-Null
-        Expand-Archive -Path $zipPath -DestinationPath $extractDir -Force
-
-        $root = Get-ChildItem -Path $extractDir -Directory | Select-Object -First 1
-        if ($null -eq $root) {
-            throw "Node.js archive extraction failed."
-        }
-
-        if (Test-Path $nodeDir) {
-            Remove-Item -Recurse -Force $nodeDir
-        }
-        New-Item -ItemType Directory -Force -Path $nodeDir | Out-Null
-        Copy-Item -Path (Join-Path $root.FullName "*") -Destination $nodeDir -Recurse -Force
-
-        if (-not (Test-Path $nodeExe)) {
-            throw "Local Node.js installation incomplete: dep\\node\\node.exe not found."
-        }
-
-        Add-PathIfExists $nodeDir
-        Write-Ok "Local Node.js installed at dep\\node"
-    }
-    finally {
-        if (Test-Path $extractDir) {
-            Remove-Item -Recurse -Force $extractDir -ErrorAction SilentlyContinue
-        }
-    }
-}
-
 function Remove-PathIfExists([string]$PathToRemove, [string]$Label) {
     if (-not (Test-Path $PathToRemove)) {
         return
@@ -626,7 +602,6 @@ function Refresh-CommonPaths {
     $candidates = @(
         (Join-Path $projectRoot "dep\python\venv\Scripts"),
         (Join-Path $projectRoot "dep\bin"),
-        (Join-Path $projectRoot "dep\node"),
         (Join-Path $projectRoot "dep\cargo\bin"),
         (Join-Path $projectRoot "dep\tools\pandoc"),
         (Join-Path $projectRoot "dep\tools\*\bin"),
@@ -769,7 +744,8 @@ try {
 
     Install-WingetPackage -Id "Python.Python.3.12" -Name "Python 3.12" -Required $true
     Install-WingetPackage -Id "Rustlang.Rustup" -Name "Rustup" -Required $true
-    Install-NodeLocal
+    Install-WingetPackage -Id "OpenJS.NodeJS.LTS" -Name "Node.js LTS" -Required $true
+    Add-DirectoryToUserPathIfExists -Candidate (Join-Path $env:ProgramFiles "nodejs") -Label "Node.js"
     $localToolStatus = Install-LocalTools
     Install-GlobalFallbackForLocalTools $localToolStatus
 
@@ -786,12 +762,48 @@ try {
     Add-ExecutableDirectoryToPath "wkhtmltopdf"
     Add-ExecutableDirectoryToPath "xelatex"
 
+    function Enable-NpmPs1AndExecutionPolicy {
+        Write-Info "Ensuring npm PowerShell shim is unblocked and CurrentUser execution policy allows scripts"
+        $npmPs1 = Join-Path $env:APPDATA 'npm\npm.ps1'
+        if (Test-Path $npmPs1) {
+            try {
+                Unblock-File -Path $npmPs1 -ErrorAction Stop
+                Write-Ok "Unblocked $npmPs1"
+            } catch {
+                Write-Warn "Failed to unblock ${npmPs1}: $($_.Exception.Message)"
+            }
+        } else {
+            Write-Info "npm.ps1 not found at $npmPs1; skipping Unblock-File"
+        }
+
+        try {
+            $currentPolicy = Get-ExecutionPolicy -Scope CurrentUser -ErrorAction SilentlyContinue
+        } catch {
+            $currentPolicy = $null
+        }
+
+        if ($currentPolicy -in @('RemoteSigned','Unrestricted','Bypass')) {
+            Write-Info "CurrentUser execution policy is $currentPolicy; leaving unchanged."
+        } else {
+            try {
+                Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned -Force -ErrorAction Stop
+                Write-Ok 'Set CurrentUser execution policy to RemoteSigned'
+            } catch {
+                Write-Warn "Failed to set execution policy for CurrentUser: $($_.Exception.Message)"
+                Write-Warn "You can run: Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned"
+            }
+        }
+    }
+
     Write-Info "Preparing project dependencies"
     New-OrRepairVenv
 
-    $npmCommand = Find-CommandPath @("npm", "npm.cmd")
+    # Ensure npm PowerShell shim and execution policy are ok before running npm
+    Enable-NpmPs1AndExecutionPolicy
+
+    $npmCommand = Find-CommandPath @("npm.cmd", "npm")
     if ($null -eq $npmCommand) {
-        throw "npm not found from local dep\\node or system PATH."
+        throw "npm not found in system PATH after Node.js installation."
     }
 
     Write-Info "Installing npm dependencies"
@@ -803,7 +815,7 @@ try {
     Write-Host ""
     Write-Info "Environment verification"
     Verify-Command "node"
-    Verify-Command "npm"
+    Verify-Command "npm.cmd"
     Verify-Command "rustc"
     Verify-Command "cargo"
     Verify-Command "python"

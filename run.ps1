@@ -40,36 +40,6 @@ function Find-CommandPath([string[]]$Names) {
     return $null
 }
 
-function Resolve-CommandLocalFirst([string]$Name) {
-    $preferredLocalMap = @{
-        npm = @(
-            (Join-Path $projectRoot "dep\node\npm.cmd"),
-            (Join-Path $projectRoot "dep\node\npm")
-        )
-        node = @(
-            (Join-Path $projectRoot "dep\node\node.exe")
-        )
-        python = @(
-            (Join-Path $projectRoot "dep\python\venv\Scripts\python.exe")
-        )
-    }
-
-    if ($preferredLocalMap.ContainsKey($Name)) {
-        foreach ($candidate in $preferredLocalMap[$Name]) {
-            if (Test-Path $candidate) {
-                return $candidate
-            }
-        }
-    }
-
-    $command = Get-Command $Name -ErrorAction SilentlyContinue
-    if ($null -ne $command) {
-        return $command.Source
-    }
-
-    return $null
-}
-
 function Add-PathIfExists([string]$Candidate) {
     if ((Test-Path $Candidate) -and ($env:Path -notlike "*$Candidate*")) {
         $env:Path = "$Candidate;$env:Path"
@@ -80,7 +50,6 @@ function Add-DepToolPaths {
     $depRoot = Join-Path $projectRoot "dep"
     Add-PathIfExists (Join-Path $depRoot "python\venv\Scripts")
     Add-PathIfExists (Join-Path $depRoot "bin")
-    Add-PathIfExists (Join-Path $depRoot "node")
     Add-PathIfExists (Join-Path $depRoot "cargo\bin")
     Add-PathIfExists (Join-Path $depRoot "tools\pandoc")
 
@@ -120,18 +89,13 @@ if ((Test-Path $cargoBin) -and ($env:Path -notlike "*$cargoBin*")) {
     $env:Path = "$cargoBin;$env:Path"
 }
 
-$nodeBin = Join-Path $projectRoot "dep\node"
-if (-not (Test-Path $nodeBin)) {
-    $nodeBin = Join-Path $env:ProgramFiles "nodejs"
-}
-if ((Test-Path $nodeBin) -and ($env:Path -notlike "*$nodeBin*")) {
-    $env:Path = "$nodeBin;$env:Path"
+
+$globalNodeBin = Join-Path $env:ProgramFiles "nodejs"
+if ((Test-Path $globalNodeBin) -and ($env:Path -notlike "*$globalNodeBin*")) {
+    $env:Path = "$globalNodeBin;$env:Path"
 }
 
-$npmCommand = Resolve-CommandLocalFirst "npm"
-if ($null -eq $npmCommand) {
-    $npmCommand = Find-CommandPath @("npm.cmd", "npm")
-}
+$npmCommand = Find-CommandPath @("npm.cmd", "npm")
 if ($null -eq $npmCommand) {
     throw "npm not found. Please install Node.js and rerun .\\setup.bat."
 }
