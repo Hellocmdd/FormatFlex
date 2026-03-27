@@ -325,3 +325,8 @@ DocHub/
 ## 推荐开发环境
 
 - [VS Code](https://code.visualstudio.com/) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
+
+## 卸载脚本（简要）
+
+项目根目录包含 `uninstall.sh`，用于清理本地依赖与构建产物。更多使用说明见 [UNINSTALL.md](UNINSTALL.md).
+
