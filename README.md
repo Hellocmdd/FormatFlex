@@ -133,6 +133,28 @@ npm run tauri dev
 bash run.sh
 ```
 
+注意（关于 `source ~/.cargo/env` 与持久化）
+
+- 如果你希望把安装脚本的环境（例如 `cargo`）立即加载到当前终端，会话中可以运行：
+
+```bash
+source setup.sh
+```
+
+- 但是通过 `source` 加载只影响当前 shell 会话：关闭终端或新开一个终端后，环境变量不会自动保留。要在新 shell 中仍然可用，有两种方式：
+	- 让脚本将 `source ~/.cargo/env` 追加到你的 shell 启动文件（`~/.profile`, `~/.bashrc`, `~/.zshrc` 等）。`setup.sh` 在完整安装（`bash setup.sh`）时会尝试执行此操作；
+	- 或者手动在你的 shell 配置文件中添加：
+
+```bash
+if [ -f "$HOME/.cargo/env" ]; then
+	source "$HOME/.cargo/env"
+fi
+```
+
+- 总结：
+	- 若只是临时使用：`source ~/.cargo/env`即可；
+	- 若希望每次新终端都可用：运行 `bash setup.sh` 执行完整安装（脚本会试图将 `source` 写入常见的 rc 文件），或手动把 `source ~/.cargo/env` 加入你的 shell 启动脚本。
+
 ### Windows
 
 #### 安装依赖

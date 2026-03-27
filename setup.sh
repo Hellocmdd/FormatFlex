@@ -33,6 +33,72 @@ detect_pm() {
   info "检测到包管理器: $PM"
 }
 
+# ─── apt 安全安装：遇到冲突时尝试修复或逐个回退 ─────────────────────────────────
+safe_install_apt() {
+  # 用法: safe_install_apt pkg1 pkg2 ...
+  if [ $# -eq 0 ]; then return 0; fi
+  sudo apt-get update -qq || true
+
+  # 先尝试一次性安装（不带推荐包，减少冲突机会）
+  set +e
+  sudo apt-get install -y --no-install-recommends "$@"
+  rc=$?
+  set -e
+
+  if [ "$rc" -eq 0 ]; then
+    return 0
+  fi
+
+  warn "apt 安装遇到冲突或错误（退出码 $rc），尝试自动修复依赖并重试..."
+  sudo apt-get -f install -y || true
+
+  set +e
+  sudo apt-get install -y --no-install-recommends "$@"
+  rc=$?
+  set -e
+  if [ "$rc" -eq 0 ]; then
+    return 0
+  fi
+
+  # 尝试使用 aptitude 自动给出替代方案
+  if ! command -v aptitude &>/dev/null; then
+    warn "系统未安装 aptitude，尝试安装 aptitude 以便自动解析依赖冲突..."
+    set +e
+    sudo apt-get install -y aptitude || true
+    set -e
+  fi
+
+  if command -v aptitude &>/dev/null; then
+    warn "使用 aptitude 尝试自动解决依赖冲突（可能会交互或移除某些包）..."
+    set +e
+    sudo aptitude -y install "$@" || true
+    rc=$?
+    set -e
+    if [ "$rc" -eq 0 ]; then
+      return 0
+    fi
+  fi
+
+  # 最后手动逐个安装，跳过失败的包并报告
+  warn "自动方式均失败，逐个尝试安装并跳过失败的软件包。" 
+  local skipped=""
+  for p in "$@"; do
+    set +e
+    sudo apt-get install -y --no-install-recommends "$p"
+    rc=$?
+    set -e
+    if [ "$rc" -ne 0 ]; then
+      warn "跳过无法安装的软件包： $p"
+      skipped="$skipped $p"
+    fi
+  done
+
+  if [ -n "$skipped" ]; then
+    warn "以下软件包被跳过:$skipped 。请手动检查这些包的依赖或在兼容的发行版/容器中安装。"
+    return 0
+  fi
+}
+
 # ─── 预先提示并获取 sudo 凭证 ───────────────────────────────────────────────
 prepare_sudo_credentials() {
   if [ "$(id -u)" -eq 0 ]; then
@@ -74,7 +140,7 @@ install_system_deps() {
       # 音频/媒体转换依赖
       PKGS="$PKGS ffmpeg"
       # Node.js 通过 nvm 安装，不走 apt（版本太旧）
-      $INSTALL $PKGS
+      safe_install_apt $PKGS
       ;;
     dnf)
       sudo dnf groupinstall -y "Development Tools"
